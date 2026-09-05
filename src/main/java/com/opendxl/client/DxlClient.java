@@ -1410,6 +1410,11 @@ public class DxlClient implements AutoCloseable {
                     break;
                 } catch (Exception ex) {
                     logger.error("Failed to connect to broker: " + brokerInfoString + ": " + ex.getMessage());
+                    if (TlsCompatibility.isHandshakeFailure(ex) && !TlsCompatibility.isRsaKeyExchangeEnabled()) {
+                        logger.error("The TLS handshake failed and no cipher suite with RSA key exchange is "
+                            + "enabled in this JVM (see the '" + TlsCompatibility.DISABLED_ALGORITHMS_PROPERTY
+                            + "' security property); OpenDXL brokers require such a cipher suite.");
+                    }
                     latestEx = ex;
                 }
             }

@@ -44,6 +44,9 @@ class SSLValidationSocketFactory {
     public static SSLSocketFactory newInstance(final KeyStore keyStore, final String keyStorePassword)
         throws Exception {
 
+        // OpenDXL brokers only offer cipher suites with RSA key exchange, which current JDKs disable by default
+        TlsCompatibility.enableRsaKeyExchange();
+
         final TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         tmf.init(keyStore);
 

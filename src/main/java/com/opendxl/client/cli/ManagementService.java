@@ -52,6 +52,8 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
@@ -106,7 +108,7 @@ class ManagementService {
     /**
      * The supported TLS protocols to use
      */
-    private static final String[] SUPPORTED_PROTOCOLS = new String[] {"TLSv1", "TLSv1.1", "TLSv1.2"};
+    private static final String[] SUPPORTED_PROTOCOLS = new String[] {"TLSv1.2", "TLSv1.3"};
 
     /**
      * Management Service host (FQDN or IP address)
@@ -210,17 +212,21 @@ class ManagementService {
         final SSLContext sslcontext = SSLContexts.createDefault();
         sslcontext.init(null, tm, null);
 
+        // Only enable the supported protocols that the runtime knows (TLSv1.3 requires Java 8u261 or later)
+        final List<String> protocols = new ArrayList<>(Arrays.asList(SUPPORTED_PROTOCOLS));
+        protocols.retainAll(Arrays.asList(sslcontext.getSupportedSSLParameters().getProtocols()));
+        final String[] enabledProtocols = protocols.toArray(new String[0]);
+
         SSLConnectionSocketFactory socketFactory;
         if (hostNameValidation) {
-            // Allow TLSv1 protocol only
             socketFactory =
                     new SSLConnectionSocketFactory(
-                            sslcontext, SUPPORTED_PROTOCOLS, null, new DefaultHostnameVerifier());
+                            sslcontext, enabledProtocols, null, new DefaultHostnameVerifier());
         } else {
             // Disable hostname verification
             socketFactory =
                     new SSLConnectionSocketFactory(
-                            sslcontext, SUPPORTED_PROTOCOLS, null,
+                            sslcontext, enabledProtocols, null,
                             (hostName, session) -> true
                     );
         }
