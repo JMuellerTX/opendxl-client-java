@@ -21,6 +21,11 @@ java {
     targetCompatibility = JavaVersion.VERSION_1_8
 }
 
+// The sources are UTF-8; do not depend on the platform charset of the JDK running the build
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
 dependencies {
     implementation 'commons-codec:commons-codec:1.22.1'
     implementation 'commons-io:commons-io:2.22.0'
@@ -79,6 +84,7 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
 javadoc {
     exclude "**/org/eclipse/paho/**"
     options.memberLevel = JavadocMemberLevel.PUBLIC
+    options.encoding = 'UTF-8'
 }
 
 artifacts {
