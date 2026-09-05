@@ -8,6 +8,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.Filter;
 import org.apache.logging.log4j.core.appender.ConsoleAppender;
 import org.apache.logging.log4j.core.config.Configurator;
 
@@ -410,15 +411,23 @@ public class CommandLineInterface extends DxlCliCommand {
         ConfigurationBuilder<BuiltConfiguration> builder =
                 ConfigurationBuilderFactory.newConfigurationBuilder();
 
-        // create a non Error console appender
+        // create a non Error console appender (everything below ERROR is written to stdout)
         AppenderComponentBuilder nonErrorConsole = builder.newAppender("NonErrorConsole", "CONSOLE")
                 .addAttribute("target", ConsoleAppender.Target.SYSTEM_OUT)
-                        .add(builder.newLayout("PatternLayout")
-                                .addAttribute("pattern", LOGGING_PATTERN));
+                // Write to the current System.out (it may be redirected after the configuration was applied)
+                .addAttribute("follow", true)
+                .add(builder.newFilter("LevelRangeFilter", Filter.Result.ACCEPT, Filter.Result.DENY)
+                        .addAttribute("minLevel", Level.WARN)
+                        .addAttribute("maxLevel", Level.TRACE))
+                .add(builder.newLayout("PatternLayout")
+                        .addAttribute("pattern", LOGGING_PATTERN));
 
-        // create a Error console appender
+        // create a Error console appender (ERROR and above is written to stderr)
         AppenderComponentBuilder errorConsole = builder.newAppender("ErrorConsole", "CONSOLE")
                 .addAttribute("target", ConsoleAppender.Target.SYSTEM_ERR)
+                .addAttribute("follow", true)
+                .add(builder.newFilter("ThresholdFilter", Filter.Result.ACCEPT, Filter.Result.DENY)
+                        .addAttribute("level", Level.ERROR))
                 .add(builder.newLayout("PatternLayout")
                         .addAttribute("pattern", LOGGING_PATTERN));
 
@@ -431,12 +440,13 @@ public class CommandLineInterface extends DxlCliCommand {
 
         // Add Root Logger
         RootLoggerComponentBuilder rootLogger = builder.newRootLogger(Level.INFO)
-                .add(builder.newAppenderRef("NonErrorConsole"));
+                .add(builder.newAppenderRef("NonErrorConsole"))
+                .add(builder.newAppenderRef("ErrorConsole"));
 
         builder.add(rootLogger);
 
-        // apply the configuration
-        Configurator.initialize(builder.build());
+        // apply the configuration (replacing any configuration that is already active in this JVM)
+        Configurator.reconfigure(builder.build());
 
         logger = LogManager.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -489,7 +499,7 @@ public class CommandLineInterface extends DxlCliCommand {
         // Get the DXL ClI command object
         DxlCliCommand parsedCommand = parseResult.commandSpec().commandLine().getCommand();
         // set the log level on non error console
-        nonErrorConsole.addAttribute("level", parsedCommand.isVerbose() ? Level.DEBUG : Level.INFO);
+        Configurator.setRootLevel(parsedCommand.isVerbose() ? Level.DEBUG : Level.INFO);
 
         // show help message
         if (parseResult.isUsageHelpRequested() || !parseResult.errors().isEmpty() || (!parseResult.hasSubcommand()
