@@ -7,11 +7,12 @@ package com.opendxl.client.message;
 import com.opendxl.client.DxlClient;
 import com.opendxl.client.callback.ResponseCallback;
 import com.opendxl.client.util.UuidGenerator;
-import org.msgpack.MessagePack;
-import org.msgpack.packer.Packer;
-import org.msgpack.unpacker.BufferUnpacker;
+import org.msgpack.core.MessageBufferPacker;
+import org.msgpack.core.MessagePack;
+import org.msgpack.core.MessagePacker;
+import org.msgpack.core.MessageUnpacker;
+import org.msgpack.value.ValueType;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -122,9 +123,11 @@ public abstract class Message {
     private static byte[] emptyPayload = new byte[0];
 
     /**
-     * Message pack instance to use for packing/unpacking messages
+     * Packer configuration used for packing messages. The str8 format is disabled so that the produced bytes stay
+     * identical to the original (pre-2013 MessagePack specification) DXL wire format.
      */
-    private static final MessagePack sm_msgpack = new MessagePack();
+    private static final MessagePack.PackerConfig PACKER_CONFIG =
+        new MessagePack.PackerConfig().withStr8FormatSupport(false);
 
     /**
      * The version of the message
@@ -464,12 +467,11 @@ public abstract class Message {
      * @param packer The packer
      * @param strSet The string set to pack
      */
-    private void packStringSet(final Packer packer, final Set<String> strSet) throws IOException {
-        packer.writeArrayBegin(strSet.size());
+    private void packStringSet(final MessagePacker packer, final Set<String> strSet) throws IOException {
+        packer.packArrayHeader(strSet.size());
         for (final String str : strSet) {
-            packer.write(str);
+            packBytes(packer, str.getBytes(CHARSET_UTF8));
         }
-        packer.writeArrayEnd();
     }
 
     /**
@@ -478,17 +480,16 @@ public abstract class Message {
      * @param unpacker The unpacker
      * @return The string set
      */
-    private Set<String> unpackStringSet(final BufferUnpacker unpacker) throws IOException {
+    private Set<String> unpackStringSet(final MessageUnpacker unpacker) throws IOException {
         //noinspection unchecked
         Set<String> retSet = Collections.EMPTY_SET;
-        final int arraySize = unpacker.readArrayBegin();
+        final int arraySize = unpacker.unpackArrayHeader();
         if (arraySize > 0) {
             retSet = new HashSet<>(arraySize);
             for (int i = 0; i < arraySize; i++) {
-                retSet.add(new String(unpacker.readByteArray(), CHARSET_ASCII));
+                retSet.add(new String(unpackBytes(unpacker), CHARSET_ASCII));
             }
         }
-        unpacker.readArrayEnd();
         return retSet;
     }
 
@@ -498,13 +499,12 @@ public abstract class Message {
      * @param packer The packer
      * @param strMap The string map to pack
      */
-    private void packStringMap(final Packer packer, final Map<String, String> strMap) throws IOException {
-        packer.writeArrayBegin(strMap.size() << 1);
+    private void packStringMap(final MessagePacker packer, final Map<String, String> strMap) throws IOException {
+        packer.packArrayHeader(strMap.size() << 1);
         for (Map.Entry<String, String> entry : strMap.entrySet()) {
-            packer.write(entry.getKey());
-            packer.write(entry.getValue());
+            packBytes(packer, entry.getKey().getBytes(CHARSET_UTF8));
+            packBytes(packer, entry.getValue().getBytes(CHARSET_UTF8));
         }
-        packer.writeArrayEnd();
     }
 
     /**
@@ -513,19 +513,18 @@ public abstract class Message {
      * @param unpacker The unpacker
      * @return The string map
      */
-    private Map<String, String> unpackStringMap(final BufferUnpacker unpacker) throws IOException {
+    private Map<String, String> unpackStringMap(final MessageUnpacker unpacker) throws IOException {
         //noinspection unchecked
         Map<String, String> retMap = Collections.EMPTY_MAP;
-        final int arraySize = unpacker.readArrayBegin();
+        final int arraySize = unpacker.unpackArrayHeader();
         if (arraySize > 0 && ((arraySize % 2) == 0)) {
             retMap = new HashMap<>(arraySize >> 1);
             for (int i = 0; i < arraySize; i += 2) {
                 retMap.put(
-                    new String(unpacker.readByteArray(), CHARSET_UTF8),
-                    new String(unpacker.readByteArray(), CHARSET_UTF8));
+                    new String(unpackBytes(unpacker), CHARSET_UTF8),
+                    new String(unpackBytes(unpacker), CHARSET_UTF8));
             }
         }
-        unpacker.readArrayEnd();
         return retMap;
     }
 
@@ -535,13 +534,13 @@ public abstract class Message {
      * @param packer The packer
      * @throws IOException If an IO exception occurs
      */
-    void packMessage(final Packer packer) throws IOException {
-        packer.write(this.messageId.getBytes(CHARSET_ASCII));
-        packer.write(this.sourceClientId.getBytes(CHARSET_ASCII));
-        packer.write(this.sourceBrokerGuid.getBytes(CHARSET_ASCII));
+    void packMessage(final MessagePacker packer) throws IOException {
+        packBytes(packer, this.messageId.getBytes(CHARSET_ASCII));
+        packBytes(packer, this.sourceClientId.getBytes(CHARSET_ASCII));
+        packBytes(packer, this.sourceBrokerGuid.getBytes(CHARSET_ASCII));
         packStringSet(packer, getBrokerIds());
         packStringSet(packer, getClientIds());
-        packer.write(this.payload);
+        packBytes(packer, this.payload);
     }
 
     /**
@@ -550,13 +549,13 @@ public abstract class Message {
      * @param unpacker The unpacker
      * @throws IOException If an IO exception occurs
      */
-    void unpackMessage(final BufferUnpacker unpacker) throws IOException {
-        this.messageId = new String(unpacker.readByteArray(), CHARSET_ASCII);
-        this.sourceClientId = new String(unpacker.readByteArray(), CHARSET_ASCII);
-        this.sourceBrokerGuid = new String(unpacker.readByteArray(), CHARSET_ASCII);
+    void unpackMessage(final MessageUnpacker unpacker) throws IOException {
+        this.messageId = new String(unpackBytes(unpacker), CHARSET_ASCII);
+        this.sourceClientId = new String(unpackBytes(unpacker), CHARSET_ASCII);
+        this.sourceBrokerGuid = new String(unpackBytes(unpacker), CHARSET_ASCII);
         this.brokerIds = unpackStringSet(unpacker);
         this.clientIds = unpackStringSet(unpacker);
-        this.payload = unpacker.readByteArray();
+        this.payload = unpackBytes(unpacker);
     }
 
     /**
@@ -564,7 +563,7 @@ public abstract class Message {
      *
      * @param packer The packer
      */
-    private void packMessageV1(final Packer packer) throws IOException {
+    private void packMessageV1(final MessagePacker packer) throws IOException {
         packStringMap(packer, getOtherFields());
     }
 
@@ -573,7 +572,7 @@ public abstract class Message {
      *
      * @param unpacker The unpacker
      */
-    private void unpackMessageV1(final BufferUnpacker unpacker) throws IOException {
+    private void unpackMessageV1(final MessageUnpacker unpacker) throws IOException {
         this.otherFields = unpackStringMap(unpacker);
     }
 
@@ -582,8 +581,8 @@ public abstract class Message {
      *
      * @param packer The packer
      */
-    private void packMessageV2(final Packer packer) throws IOException {
-        packer.write(this.sourceTenantGuid.getBytes(CHARSET_ASCII));
+    private void packMessageV2(final MessagePacker packer) throws IOException {
+        packBytes(packer, this.sourceTenantGuid.getBytes(CHARSET_ASCII));
         packStringSet(packer, getDestTenantGuids());
     }
 
@@ -592,8 +591,8 @@ public abstract class Message {
      *
      * @param unpacker The unpacker
      */
-    private void unpackMessageV2(final BufferUnpacker unpacker) throws IOException {
-        this.sourceTenantGuid = new String(unpacker.readByteArray(), CHARSET_ASCII);
+    private void unpackMessageV2(final MessageUnpacker unpacker) throws IOException {
+        this.sourceTenantGuid = new String(unpackBytes(unpacker), CHARSET_ASCII);
         this.destTenantGuids = unpackStringSet(unpacker);
     }
 
@@ -602,8 +601,8 @@ public abstract class Message {
      *
      * @param packer The packer
      */
-    private void packMessageV3(final Packer packer) throws IOException {
-        packer.write(this.sourceClientInstanceId.getBytes(CHARSET_ASCII));
+    private void packMessageV3(final MessagePacker packer) throws IOException {
+        packBytes(packer, this.sourceClientInstanceId.getBytes(CHARSET_ASCII));
     }
 
     /**
@@ -611,8 +610,8 @@ public abstract class Message {
      *
      * @param unpacker The unpacker
      */
-    private void unpackMessageV3(final BufferUnpacker unpacker) throws IOException {
-        this.sourceClientInstanceId = new String(unpacker.readByteArray(), CHARSET_ASCII);
+    private void unpackMessageV3(final MessageUnpacker unpacker) throws IOException {
+        this.sourceClientInstanceId = new String(unpackBytes(unpacker), CHARSET_ASCII);
     }
 
     /**
@@ -622,14 +621,13 @@ public abstract class Message {
      * @throws IOException If an IO exception occurs
      */
     public final byte[] toBytes() throws IOException {
-        final ByteArrayOutputStream out = new ByteArrayOutputStream();
-        final Packer packer = sm_msgpack.createPacker(out);
+        final MessageBufferPacker packer = PACKER_CONFIG.newBufferPacker();
 
         // Write the message version
-        packer.write(MESSAGE_VERSION);
+        packer.packLong(MESSAGE_VERSION);
 
         // Write message type
-        packer.write(getMessageType());
+        packer.packByte(getMessageType());
 
         // Version 0
         packMessage(packer);
@@ -640,7 +638,7 @@ public abstract class Message {
         // Version 3
         packMessageV3(packer);
 
-        return out.toByteArray();
+        return packer.toByteArray();
     }
 
     /**
@@ -652,14 +650,13 @@ public abstract class Message {
      * @throws IOException If an IO exception occurs
      */
     public static Message fromBytes(final byte[] bytes) throws IOException {
-        BufferUnpacker unpacker = sm_msgpack.createBufferUnpacker(bytes);
-        unpacker.resetReadByteCount();
+        final MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(bytes);
 
         // Read the message version
-        final long version = unpacker.readLong();
+        final long version = unpacker.unpackLong();
 
         // Read the message type
-        final byte messageType = unpacker.readByte();
+        final byte messageType = unpacker.unpackByte();
         Message message = null;
         switch (messageType) {
             case MESSAGE_TYPE_REQUEST:
@@ -702,11 +699,31 @@ public abstract class Message {
     }
 
     /**
-     * Returns the message pack instance to use for packing/unpacking messages
+     * Packs the specified bytes in the MessagePack "raw" format used by the DXL wire format
      *
-     * @return The message pack instance to use for packing/unpacking messages
+     * @param packer The packer
+     * @param bytes The bytes to pack
+     * @throws IOException If an I/O error occurs
      */
-    public static MessagePack getMessagePack() {
-        return sm_msgpack;
+    static void packBytes(final MessagePacker packer, final byte[] bytes) throws IOException {
+        packer.packRawStringHeader(bytes.length);
+        packer.writePayload(bytes);
+    }
+
+    /**
+     * Unpacks bytes that were packed in the MessagePack "raw" format (the "bin" format is accepted as well)
+     *
+     * @param unpacker The unpacker
+     * @return The unpacked bytes
+     * @throws IOException If an I/O error occurs
+     */
+    static byte[] unpackBytes(final MessageUnpacker unpacker) throws IOException {
+        final int length;
+        if (unpacker.getNextFormat().getValueType() == ValueType.BINARY) {
+            length = unpacker.unpackBinaryHeader();
+        } else {
+            length = unpacker.unpackRawStringHeader();
+        }
+        return unpacker.readPayload(length);
     }
 }

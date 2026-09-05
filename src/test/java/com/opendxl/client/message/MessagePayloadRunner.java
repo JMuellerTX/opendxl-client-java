@@ -9,11 +9,10 @@ import com.opendxl.client.DxlClient;
 import com.opendxl.client.DxlClientFactory;
 import com.opendxl.client.ServiceRegistrationInfo;
 import com.opendxl.client.util.UuidGenerator;
-import org.msgpack.MessagePack;
-import org.msgpack.packer.Packer;
-import org.msgpack.unpacker.BufferUnpacker;
+import org.msgpack.core.MessageBufferPacker;
+import org.msgpack.core.MessagePack;
+import org.msgpack.core.MessageUnpacker;
 
-import java.io.ByteArrayOutputStream;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
@@ -74,12 +73,10 @@ public class MessagePayloadRunner extends AbstractRunner {
             regInfo.addTopic(topic,
                 request -> {
                     try {
-                        final MessagePack pack = Message.getMessagePack();
-                        final BufferUnpacker unpacker =
-                            pack.createBufferUnpacker(request.getPayload());
-                        assertEquals(TEST_STRING, unpacker.readString());
-                        assertEquals(TEST_BYTE, unpacker.readByte());
-                        assertEquals(TEST_INT, unpacker.readInt());
+                        final MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(request.getPayload());
+                        assertEquals(TEST_STRING, unpacker.unpackString());
+                        assertEquals(TEST_BYTE, unpacker.unpackByte());
+                        assertEquals(TEST_INT, unpacker.unpackInt());
 
                         lock.lock();
                         try {
@@ -104,13 +101,11 @@ public class MessagePayloadRunner extends AbstractRunner {
                 // in the payload
                 //
                 final Request request = new Request(client, topic);
-                final MessagePack pack = Message.getMessagePack();
-                final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                final Packer packer = pack.createPacker(baos);
-                packer.write(TEST_STRING);
-                packer.write(TEST_BYTE);
-                packer.write(TEST_INT);
-                request.setPayload(baos.toByteArray());
+                final MessageBufferPacker packer = MessagePack.newDefaultBufferPacker();
+                packer.packString(TEST_STRING);
+                packer.packByte(TEST_BYTE);
+                packer.packInt(TEST_INT);
+                request.setPayload(packer.toByteArray());
                 client.asyncRequest(request);
 
                 //

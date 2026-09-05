@@ -5,8 +5,8 @@
 package com.opendxl.client.message;
 
 import com.opendxl.client.DxlClient;
-import org.msgpack.packer.Packer;
-import org.msgpack.unpacker.BufferUnpacker;
+import org.msgpack.core.MessagePacker;
+import org.msgpack.core.MessageUnpacker;
 
 import java.io.IOException;
 
@@ -63,7 +63,7 @@ public class Event extends Message {
      * {@inheritDoc}
      */
     @Override
-    void packMessage(Packer packer) throws IOException {
+    void packMessage(MessagePacker packer) throws IOException {
         super.packMessage(packer);
     }
 
@@ -71,7 +71,7 @@ public class Event extends Message {
      * {@inheritDoc}
      */
     @Override
-    void unpackMessage(BufferUnpacker unpacker) throws IOException {
+    void unpackMessage(MessageUnpacker unpacker) throws IOException {
         super.unpackMessage(unpacker);
     }
 }

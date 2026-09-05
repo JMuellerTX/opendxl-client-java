@@ -29,7 +29,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.2'
     implementation 'org.apache.logging.log4j:log4j-api:2.26.1'
     implementation 'org.apache.logging.log4j:log4j-core:2.26.1'
-    implementation 'org.msgpack:msgpack:0.6.7'
+    implementation 'org.msgpack:msgpack-core:0.9.12'
     implementation 'info.picocli:picocli:3.8.2'
     implementation 'org.apache.commons:commons-lang3:3.20.0'
     implementation 'org.bouncycastle:bcpkix-jdk18on:1.85'

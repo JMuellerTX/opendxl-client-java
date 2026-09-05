@@ -5,8 +5,8 @@
 package com.opendxl.client.message;
 
 import com.opendxl.client.DxlClient;
-import org.msgpack.packer.Packer;
-import org.msgpack.unpacker.BufferUnpacker;
+import org.msgpack.core.MessagePacker;
+import org.msgpack.core.MessageUnpacker;
 
 import java.io.IOException;
 
@@ -114,19 +114,19 @@ public class ErrorResponse extends Response {
      * {@inheritDoc}
      */
     @Override
-    void packMessage(final Packer packer) throws IOException {
+    void packMessage(final MessagePacker packer) throws IOException {
         super.packMessage(packer);
-        packer.write(this.errorCode);
-        packer.write(this.errorMessage.getBytes(CHARSET_UTF8));
+        packer.packInt(this.errorCode);
+        packBytes(packer, this.errorMessage.getBytes(CHARSET_UTF8));
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    void unpackMessage(final BufferUnpacker unpacker) throws IOException {
+    void unpackMessage(final MessageUnpacker unpacker) throws IOException {
         super.unpackMessage(unpacker);
-        this.errorCode = unpacker.readInt();
-        this.errorMessage = new String(unpacker.readByteArray(), CHARSET_UTF8);
+        this.errorCode = unpacker.unpackInt();
+        this.errorMessage = new String(unpackBytes(unpacker), CHARSET_UTF8);
     }
 }

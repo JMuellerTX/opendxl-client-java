@@ -5,8 +5,8 @@
 package com.opendxl.client.message;
 
 import com.opendxl.client.DxlClient;
-import org.msgpack.packer.Packer;
-import org.msgpack.unpacker.BufferUnpacker;
+import org.msgpack.core.MessagePacker;
+import org.msgpack.core.MessageUnpacker;
 
 import java.io.IOException;
 
@@ -113,19 +113,19 @@ public class Request extends Message {
      * {@inheritDoc}
      */
     @Override
-    void packMessage(final Packer packer) throws IOException {
+    void packMessage(final MessagePacker packer) throws IOException {
         super.packMessage(packer);
-        packer.write(this.replyToTopic.getBytes(CHARSET_ASCII));
-        packer.write(this.serviceId.getBytes(CHARSET_ASCII));
+        packBytes(packer, this.replyToTopic.getBytes(CHARSET_ASCII));
+        packBytes(packer, this.serviceId.getBytes(CHARSET_ASCII));
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    void unpackMessage(final BufferUnpacker unpacker) throws IOException {
+    void unpackMessage(final MessageUnpacker unpacker) throws IOException {
         super.unpackMessage(unpacker);
-        this.replyToTopic = new String(unpacker.readByteArray(), CHARSET_ASCII);
-        this.serviceId = new String(unpacker.readByteArray(), CHARSET_ASCII);
+        this.replyToTopic = new String(unpackBytes(unpacker), CHARSET_ASCII);
+        this.serviceId = new String(unpackBytes(unpacker), CHARSET_ASCII);
     }
 }
