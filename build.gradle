@@ -15,14 +15,22 @@ apply plugin: 'groovy'
 apply plugin: 'maven-publish'
 apply plugin: 'signing'
 
-// The client is consumed from Java 8 applications; keep the bytecode and the language level at Java 8
+// Branch-specific: `master` is the JDK 21 line (see README.md, "Branches"). Compilation, tests and javadoc run
+// on a JDK 21 toolchain (downloaded by the foojay resolver in settings.gradle when it is not installed) and the
+// bytecode/language level is Java 21 (`--release 21`). The jdk17/jdk11/jdk8 branches pin their own JDK here;
+// the library API and the DXL wire format are identical on all branches.
+// JDK 21 notes: the CLI tests run without a SecurityManager (JEP 411, `AfterTestAssertions`), the test JVM needs
+// no `--add-opens`, and the `TlsCompatibility` security-property workaround for the RSA key exchange cipher
+// suites is required on every JDK line since the 2025 JDK updates (it is not branch specific).
 java {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
 
-// The sources are UTF-8; do not depend on the platform charset of the JDK running the build
 tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    // The sources are UTF-8; do not depend on the platform charset of the JDK running the build
     options.encoding = 'UTF-8'
 }
 
