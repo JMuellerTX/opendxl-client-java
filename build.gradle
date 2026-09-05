@@ -15,21 +15,25 @@ apply plugin: 'groovy'
 apply plugin: 'maven-publish'
 apply plugin: 'signing'
 
-// Branch-specific: `master` is the JDK 21 line (see README.md, "Branches"). Compilation, tests and javadoc run
-// on a JDK 21 toolchain (downloaded by the foojay resolver in settings.gradle when it is not installed) and the
-// bytecode/language level is Java 21 (`--release 21`). The jdk17/jdk11/jdk8 branches pin their own JDK here;
-// the library API and the DXL wire format are identical on all branches.
-// JDK 21 notes: the CLI tests run without a SecurityManager (JEP 411, `AfterTestAssertions`), the test JVM needs
-// no `--add-opens`, and the `TlsCompatibility` security-property workaround for the RSA key exchange cipher
-// suites is required on every JDK line since the 2025 JDK updates (it is not branch specific).
+// Branch-specific: `jdk8` is the JDK 8 line (see README.md, "Branches"). Compilation, tests and javadoc run
+// on a JDK 8 toolchain (downloaded by the foojay resolver in settings.gradle when it is not installed) and the
+// bytecode/language level is Java 8. javac 8 has no `--release` option, so unlike master (JDK 21) and the other
+// jdk* branches this branch uses sourceCompatibility/targetCompatibility. The library API and the DXL wire
+// format are identical on all branches.
+// JDK 8 notes: the workflow runs Gradle itself on JDK 8, which limits the build plugins to versions that still
+// run on a Java 8 JVM (com.gradleup.shadow 8.3.x - 9.x needs Java 11; Gradle's default Checkstyle 9.3 - 10.x
+// needs Java 11; the foojay resolver 0.9.0). The JDK 8 toolchain has no module system, so no `--add-opens`
+// flags exist here. The `TlsCompatibility` security-property workaround for the RSA key exchange cipher suites
+// is required on every JDK line since the 2025 JDK updates (it is not branch specific).
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(8)
     }
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release = 21
     // The sources are UTF-8; do not depend on the platform charset of the JDK running the build
     options.encoding = 'UTF-8'
 }
