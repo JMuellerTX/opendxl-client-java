@@ -1,17 +1,17 @@
 name: Build
 
-# Branch-specific (see README.md, "Branches"): this branch is the JDK 21 line, so the workflow runs on the
-# `master` branch and builds and tests with JDK 21 only. The jdk17/jdk11/jdk8 branches carry their own
-# single-JDK matrix. Gradle runs on the matrix JDK and the toolchain in build.gradle pins the same version,
-# so no JDK is downloaded on the runner.
+# Branch-specific (see README.md, "Branches"): this branch is the JDK 17 line, so the workflow runs on the
+# `jdk17` branch and builds and tests with JDK 17 only. master (JDK 21) and the jdk11/jdk8 branches carry
+# their own single-JDK matrix. Gradle runs on the matrix JDK and the toolchain in build.gradle pins the same
+# version, so no JDK is downloaded on the runner.
 on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - jdk17
   pull_request:
     branches:
-      - master
+      - jdk17
   schedule:
     - cron:  '0 0 * * *'
 
@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        java-version: [ 21 ]
+        java-version: [ 17 ]
       fail-fast: false
 
     steps:
