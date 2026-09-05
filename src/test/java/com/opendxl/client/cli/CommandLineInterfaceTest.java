@@ -22,7 +22,6 @@ import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemReader;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.contrib.java.lang.system.ExpectedSystemExit;
 import org.junit.contrib.java.lang.system.SystemErrRule;
 import org.junit.contrib.java.lang.system.SystemOutRule;
 
@@ -209,14 +208,14 @@ public class CommandLineInterfaceTest {
     @Rule
     public final SystemErrRule systemErrRule = new SystemErrRule().enableLog().mute();
     /**
-     * The Expected System Exit
+     * Assertions that are checked after the CLI has completed
      */
     @Rule
-    public final ExpectedSystemExit exit = ExpectedSystemExit.none();
+    public final AfterTestAssertions afterwards = new AfterTestAssertions();
 
     @Test
     public void testShowVersionInfo() {
-        exit.checkAssertionAfterwards(() -> assertEquals("Unexpected output from CLI",
+        afterwards.checkAssertionAfterwards(() -> assertEquals("Unexpected output from CLI",
                 "null version: null" + System.lineSeparator(),
                 systemOutRule.getLog()));
         CommandLineInterface.main(new String[] {"-V"});
@@ -224,7 +223,7 @@ public class CommandLineInterfaceTest {
 
     @Test
     public void testShowMainUsageHelp() {
-        exit.checkAssertionAfterwards(() -> assertEquals("Unexpected output from CLI for usage help",
+        afterwards.checkAssertionAfterwards(() -> assertEquals("Unexpected output from CLI for usage help",
                 MAIN_USAGE_HELP,
                 systemOutRule.getLog()));
         // With -h arg
@@ -237,7 +236,7 @@ public class CommandLineInterfaceTest {
 
     @Test
     public void testShowProvisionUsageHelp() {
-        exit.checkAssertionAfterwards(() -> assertEquals(
+        afterwards.checkAssertionAfterwards(() -> assertEquals(
                 "Unexpected output from CLI for provisionconfig usage help",
                 PROVISION_USAGE,
                 systemOutRule.getLog()));
@@ -247,7 +246,7 @@ public class CommandLineInterfaceTest {
 
     @Test
     public void testShowProvisionUsageHelpWithoutHelpArg() {
-        exit.checkAssertionAfterwards(() -> {
+        afterwards.checkAssertionAfterwards(() -> {
             assertEquals("Unexpected output from CLI for provisionconfig usage help",
                     PROVISION_USAGE,
                     systemOutRule.getLog());
@@ -262,7 +261,7 @@ public class CommandLineInterfaceTest {
 
     @Test
     public void testShowGenerateCsrUsageHelp() {
-        exit.checkAssertionAfterwards(() -> assertEquals(
+        afterwards.checkAssertionAfterwards(() -> assertEquals(
                 "Unexpected output from CLI for generatecsr usage help",
                 GENERATE_CSR_USAGE,
                 systemOutRule.getLog()));
@@ -272,7 +271,7 @@ public class CommandLineInterfaceTest {
 
     @Test
     public void testShowGenerateCsrUsageHelpWithoutHelpArg() {
-        exit.checkAssertionAfterwards(() -> {
+        afterwards.checkAssertionAfterwards(() -> {
             assertEquals("Unexpected output from CLI for generatecsr usage help",
                     GENERATE_CSR_USAGE,
                     systemOutRule.getLog());
@@ -287,7 +286,7 @@ public class CommandLineInterfaceTest {
 
     @Test
     public void testShowUpdateConfigUsageHelp() {
-        exit.checkAssertionAfterwards(() -> assertEquals(
+        afterwards.checkAssertionAfterwards(() -> assertEquals(
                 "Unexpected output from CLI for generatecsr usage help",
                 UPDATE_CONFIG_USAGE,
                 systemOutRule.getLog()));
@@ -297,7 +296,7 @@ public class CommandLineInterfaceTest {
 
     @Test
     public void testShowUpdateConfigUsageHelpWithoutHelpArg() {
-        exit.checkAssertionAfterwards(() -> {
+        afterwards.checkAssertionAfterwards(() -> {
             assertEquals("Unexpected output from CLI for generatecsr usage help",
                     UPDATE_CONFIG_USAGE,
                     systemOutRule.getLog());
@@ -313,7 +312,7 @@ public class CommandLineInterfaceTest {
     private void testGenerateCSR(String[] commandLineArgs, String filePrefix,
                                  Map<ASN1ObjectIdentifier, String> certificateAttributes,
                                  List<String> csrSanValues) {
-        exit.checkAssertionAfterwards(() -> {
+        afterwards.checkAssertionAfterwards(() -> {
 
             File privateKeyFile = new File(TEMP_FILE_DIR_NAME + File.separatorChar + filePrefix + ".key");
             File csrFile = new File(TEMP_FILE_DIR_NAME + File.separatorChar + filePrefix + ".csr");
