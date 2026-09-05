@@ -7,7 +7,9 @@ Prerequisites
 * One or more DXL Brokers:
  - `OpenDXL Broker <https://github.com/opendxl/opendxl-broker>`_
  - DXL Brokers (3.0.1 or later) deployed within an ePO managed environment
-* Java Development Kit 8 (JDK 8) or later
+* Java Development Kit 8 (JDK 8) or later. The minimum Java version of a build depends on the
+  branch it was built from (``jdk8``, ``jdk11``, ``jdk17`` or ``master`` = JDK 21), see the
+  "Branches" section of the repository ``README.md``.
 
 Java SDK Contents
 *****************

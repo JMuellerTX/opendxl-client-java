@@ -44,6 +44,50 @@ or Gradle:
 compile 'com.opendxl:dxlclient:0.2.9'
 ```
 
+## Branches
+
+The repository is maintained as one branch per supported JDK. Every branch pins its JDK
+with a Gradle Java toolchain (`java.toolchain.languageVersion` in `build.gradle`), compiles
+the library for exactly that Java release and runs its GitHub Actions workflow on that JDK
+only. Missing JDKs are downloaded automatically by the
+[foojay toolchain resolver](https://github.com/gradle/foojay-toolchains) configured in
+`settings.gradle`, so `./gradlew assemble` works on any branch regardless of the locally
+installed JDK (the resolver stays at 0.9.0, the last version that runs on a Java 8 or 11
+Gradle JVM).
+
+| Branch   | JDK / bytecode level | Notes                                                                    |
+|----------|----------------------|--------------------------------------------------------------------------|
+| `master` | 21                   | Main development line, language level 21 (`--release 21`)                |
+| `jdk17`  | 17                   | `--release 17`                                                           |
+| `jdk11`  | 11                   | `--release 11`                                                           |
+| `jdk8`   | 8                    | Java 8 bytecode via `sourceCompatibility`/`targetCompatibility`          |
+
+The library API (packages, classes, signatures) and the DXL wire format are identical on all
+branches; the branches differ only in build settings and in the Java release the bytecode is
+compiled for. Branch specific settings are marked with comments in `build.gradle` and
+`.github/workflows/main.yml`. The `TlsCompatibility` workaround (re-enabling the
+`TLS_RSA_*` cipher suites that OpenDXL brokers require) is needed on every JDK line since
+the 2025 JDK updates and is therefore not branch specific.
+
+Workflow for changes:
+
+1. Fix on `master` first and let its workflow run go green.
+2. Cherry-pick the commit into the older branches where it applies, from newest to oldest:
+   `jdk17` -> `jdk11` -> `jdk8`, keeping the reference to the original commit:
+
+   ```sh
+   git checkout jdk17 && git cherry-pick -x <sha>
+   git checkout jdk11 && git cherry-pick -x <sha>
+   git checkout jdk8  && git cherry-pick -x <sha>
+   ```
+
+3. Push each branch; the branch's own workflow run (`build`, one job on the branch's JDK,
+   which needs the OpenDXL broker and squid containers of the workflow) must be green
+   before the change is considered done on that branch.
+
+Local build on any branch: `./gradlew assemble`. The test suite needs a provisioned client
+configuration in `clientconfig/` (see `.github/workflows/main.yml`): `./gradlew test`.
+
 ## Bugs and Feedback
 
 For bugs, questions and discussions please use the [Github Issues](https://github.com/opendxl/opendxl-client-java/issues).
