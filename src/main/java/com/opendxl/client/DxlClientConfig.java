@@ -54,10 +54,26 @@ public class DxlClientConfig {
     private static final String CERT_FILE_INI_KEY_NAME = "CertFile";
     private static final String PRIVATE_KEY_INI_KEY_NAME = "PrivateKey";
     private static final String USE_WEBSOCKETS_INI_KEY_NAME = "UseWebSockets";
+    private static final String TLS_MIN_VERSION_INI_KEY_NAME = "TlsMinVersion";
+    private static final String VERIFY_HOSTNAME_INI_KEY_NAME = "VerifyHostname";
     private static final String PROXY_ADDRESS = "Address";
     private static final String PROXY_PORT = "Port";
     private static final String PROXY_USER_NAME = "User";
     private static final String PROXY_USER_PASSWORD = "Password";
+
+    /**
+     * The lowest TLS version the client will negotiate, as a JSSE protocol name.
+     * Matches the Python client's {@code TlsMinVersion} default of 1.2.
+     */
+    private static final String DEFAULT_TLS_MIN_VERSION = "TLSv1.2";
+
+    /**
+     * Whether the broker host name is checked against the certificate. Off by default, for the
+     * same reason as in the Python client: broker certificates historically carry names that do
+     * not match how clients address them, so switching it on unconditionally breaks older
+     * fabrics.
+     */
+    private static final String DEFAULT_VERIFY_HOSTNAME = "false";
 
     /**
      * A mapping of various strings to boolean values
@@ -131,6 +147,16 @@ public class DxlClientConfig {
      * Whether to use WebSockets or regular MQTT over tcp
      */
     private boolean useWebSockets = false;
+
+    /**
+     * The lowest TLS version to negotiate, as a JSSE protocol name
+     */
+    private String tlsMinVersion = DEFAULT_TLS_MIN_VERSION;
+
+    /**
+     * Whether the broker host name is verified against the presented certificate
+     */
+    private boolean verifyHostname = false;
 
     /**
      * The number of times to retry during connect, default -1 (infinite)
@@ -442,6 +468,72 @@ public class DxlClientConfig {
      */
     public boolean isUseWebSockets() {
         return useWebSockets;
+    }
+
+    /**
+     * Returns the lowest TLS version the client will negotiate, as a JSSE protocol name
+     * ({@code TLSv1.2}, {@code TLSv1.3}).
+     * <P>
+     * Config key {@code TlsMinVersion} in the {@code General} section, default {@code 1.2}.
+     * The client always negotiates the highest version the broker and the JDK have in common;
+     * this is the floor, not the version.
+     * </P>
+     *
+     * @return The lowest TLS version to negotiate
+     */
+    public String getTlsMinVersion() {
+        return this.tlsMinVersion;
+    }
+
+    /**
+     * Sets the lowest TLS version the client will negotiate
+     *
+     * @param tlsMinVersion A version ("1.2", "1.3") or a JSSE protocol name ("TLSv1.2")
+     */
+    public void setTlsMinVersion(final String tlsMinVersion) {
+        this.tlsMinVersion = normalizeTlsVersion(tlsMinVersion);
+    }
+
+    /**
+     * Returns whether the broker host name is verified against the presented certificate.
+     * <P>
+     * Config key {@code VerifyHostname} in the {@code General} section, default {@code false}.
+     * Broker certificates historically carry names that do not match how clients address them,
+     * so this stays opt-in.
+     * </P>
+     *
+     * @return Whether the broker host name is verified
+     */
+    public boolean isVerifyHostname() {
+        return this.verifyHostname;
+    }
+
+    /**
+     * Sets whether the broker host name is verified against the presented certificate
+     *
+     * @param verifyHostname Whether to verify the broker host name
+     */
+    public void setVerifyHostname(final boolean verifyHostname) {
+        this.verifyHostname = verifyHostname;
+    }
+
+    /**
+     * Accepts both the Python client's short form ("1.2") and the JSSE name ("TLSv1.2") and
+     * returns the JSSE name. Anything unrecognised falls back to the default rather than
+     * failing the connection, and anything below 1.2 is raised to 1.2.
+     *
+     * @param value The configured value
+     * @return A JSSE protocol name
+     */
+    private static String normalizeTlsVersion(final String value) {
+        if (value == null) {
+            return DEFAULT_TLS_MIN_VERSION;
+        }
+        final String trimmed = value.trim();
+        if ("1.3".equals(trimmed) || "TLSv1.3".equalsIgnoreCase(trimmed)) {
+            return "TLSv1.3";
+        }
+        return DEFAULT_TLS_MIN_VERSION;
     }
 
     /**
@@ -771,6 +863,9 @@ public class DxlClientConfig {
         final IniParser parser = new IniParser();
         // Add Use WebSockets
         parser.addValue(GENERAL_INI_SECTION, USE_WEBSOCKETS_INI_KEY_NAME, String.valueOf(this.useWebSockets));
+        // Add the TLS settings
+        parser.addValue(GENERAL_INI_SECTION, TLS_MIN_VERSION_INI_KEY_NAME, this.tlsMinVersion);
+        parser.addValue(GENERAL_INI_SECTION, VERIFY_HOSTNAME_INI_KEY_NAME, String.valueOf(this.verifyHostname));
 
         // Add Broker Cert Chain
         parser.addValue(CERTS_INI_SECTION, BROKER_CERT_INI_CHAIN_KEY_NAME, this.brokerCaBundlePathOriginal);
@@ -1177,6 +1272,10 @@ public class DxlClientConfig {
             dxlClientConfig.privateKeyOriginal = privateKeyOriginal;
             dxlClientConfig.useWebSockets = stringToBooleanMap.get(parser.getValue(GENERAL_INI_SECTION,
                 USE_WEBSOCKETS_INI_KEY_NAME, (!webSocketBrokers.isEmpty() && brokers.isEmpty()) ? "true" : "false"));
+            dxlClientConfig.tlsMinVersion = normalizeTlsVersion(
+                parser.getValue(GENERAL_INI_SECTION, TLS_MIN_VERSION_INI_KEY_NAME, DEFAULT_TLS_MIN_VERSION));
+            dxlClientConfig.verifyHostname = stringToBooleanMap.get(
+                parser.getValue(GENERAL_INI_SECTION, VERIFY_HOSTNAME_INI_KEY_NAME, DEFAULT_VERIFY_HOSTNAME));
 
             // Get the proxy information
             dxlClientConfig.proxyAddress = parser.getValue(PROXY_INI_SECTION, PROXY_ADDRESS, "");
