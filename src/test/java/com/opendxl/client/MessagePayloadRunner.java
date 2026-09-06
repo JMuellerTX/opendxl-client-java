@@ -4,7 +4,6 @@
 
 package com.opendxl.client;
 
-import com.opendxl.client.message.Message;
 import com.opendxl.client.message.Request;
 import com.opendxl.client.util.UuidGenerator;
 import org.msgpack.core.MessageBufferPacker;
