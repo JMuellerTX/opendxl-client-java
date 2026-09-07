@@ -55,6 +55,7 @@ public class DxlClientConfig {
     private static final String PRIVATE_KEY_INI_KEY_NAME = "PrivateKey";
     private static final String USE_WEBSOCKETS_INI_KEY_NAME = "UseWebSockets";
     private static final String TLS_MIN_VERSION_INI_KEY_NAME = "TlsMinVersion";
+    private static final String TLS_CIPHERS_INI_KEY_NAME = "TlsCiphers";
     private static final String VERIFY_HOSTNAME_INI_KEY_NAME = "VerifyHostname";
     private static final String PROXY_ADDRESS = "Address";
     private static final String PROXY_PORT = "Port";
@@ -66,6 +67,11 @@ public class DxlClientConfig {
      * Matches the Python client's {@code TlsMinVersion} default of 1.2.
      */
     private static final String DEFAULT_TLS_MIN_VERSION = "TLSv1.2";
+
+    /**
+     * The value of {@code TlsCiphers} that selects the cipher suites the JDK enables by default
+     */
+    private static final String DEFAULT_TLS_CIPHERS = "default";
 
     /**
      * Whether the broker host name is checked against the certificate. Off by default, for the
@@ -152,6 +158,11 @@ public class DxlClientConfig {
      * The lowest TLS version to negotiate, as a JSSE protocol name
      */
     private String tlsMinVersion = DEFAULT_TLS_MIN_VERSION;
+
+    /**
+     * The cipher suites to enable, as JSSE names, or {@code null} for the JDK defaults
+     */
+    private String[] tlsCiphers = null;
 
     /**
      * Whether the broker host name is verified against the presented certificate
@@ -495,6 +506,37 @@ public class DxlClientConfig {
     }
 
     /**
+     * Returns the TLS cipher suites the client enables, as JSSE cipher suite names, or
+     * {@code null} when the JDK defaults are used.
+     * <P>
+     * Config key {@code TlsCiphers} in the {@code General} section. Unlike the Python client,
+     * which passes its value to OpenSSL, the Java client expects a comma separated list of
+     * <B>JSSE cipher suite names</B> (for example
+     * {@code TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_RSA_WITH_AES_128_CBC_SHA256}); the
+     * OpenSSL cipher list syntax ({@code ECDHE+AESGCM:!aNULL}) has no equivalent in JSSE and is
+     * ignored with a warning, so a configuration file shared with a Python client keeps working.
+     * The value {@code default} (or an empty value) selects the cipher suites the JDK enables.
+     * </P>
+     *
+     * @return The cipher suites to enable, or {@code null} for the JDK defaults
+     */
+    public String[] getTlsCiphers() {
+        return this.tlsCiphers == null ? null : this.tlsCiphers.clone();
+    }
+
+    /**
+     * Sets the TLS cipher suites the client enables
+     *
+     * @param tlsCiphers A comma separated list of JSSE cipher suite names, or {@code null},
+     *                   an empty value or {@code default} for the cipher suites the JDK enables
+     * @throws IllegalArgumentException If the value contains no JSSE cipher suite name (for
+     *                                  example because it uses the OpenSSL cipher list syntax)
+     */
+    public void setTlsCiphers(final String tlsCiphers) {
+        this.tlsCiphers = normalizeTlsCiphers(tlsCiphers);
+    }
+
+    /**
      * Returns whether the broker host name is verified against the presented certificate.
      * <P>
      * Config key {@code VerifyHostname} in the {@code General} section, default {@code false}.
@@ -534,6 +576,46 @@ public class DxlClientConfig {
             return "TLSv1.3";
         }
         return DEFAULT_TLS_MIN_VERSION;
+    }
+
+    /**
+     * Turns the {@code TlsCiphers} value into the JSSE cipher suite names to enable.
+     * <P>
+     * JSSE has no equivalent of the OpenSSL cipher list syntax (groups such as {@code ECDHE+AESGCM},
+     * exclusions such as {@code !aNULL}, ordering by strength), so no attempt is made to translate
+     * it: the names are taken literally and must be JSSE cipher suite names. Entries are separated
+     * by commas; whitespace around them is ignored.
+     * </P>
+     *
+     * @param value The configured value
+     * @return The cipher suite names, or {@code null} for the JDK defaults
+     * @throws IllegalArgumentException If the value contains no JSSE cipher suite name
+     */
+    private static String[] normalizeTlsCiphers(final String value) {
+        if (value == null) {
+            return null;
+        }
+        final String trimmed = value.trim();
+        if (trimmed.isEmpty() || DEFAULT_TLS_CIPHERS.equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+        final List<String> suites = new ArrayList<>();
+        for (final String entry : trimmed.split(",")) {
+            final String suite = entry.trim();
+            if (!suite.isEmpty()) {
+                suites.add(suite.toUpperCase(java.util.Locale.ROOT));
+            }
+        }
+        for (final String suite : suites) {
+            if (!suite.startsWith("TLS_") && !suite.startsWith("SSL_")) {
+                throw new IllegalArgumentException(
+                    "'" + suite + "' is not a JSSE cipher suite name. The Java client expects "
+                        + TLS_CIPHERS_INI_KEY_NAME + " to be a comma separated list of JSSE names "
+                        + "(for example TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384); the OpenSSL cipher "
+                        + "list syntax used by the Python client is not supported.");
+            }
+        }
+        return suites.isEmpty() ? null : suites.toArray(new String[0]);
     }
 
     /**
@@ -865,6 +947,8 @@ public class DxlClientConfig {
         parser.addValue(GENERAL_INI_SECTION, USE_WEBSOCKETS_INI_KEY_NAME, String.valueOf(this.useWebSockets));
         // Add the TLS settings
         parser.addValue(GENERAL_INI_SECTION, TLS_MIN_VERSION_INI_KEY_NAME, this.tlsMinVersion);
+        parser.addValue(GENERAL_INI_SECTION, TLS_CIPHERS_INI_KEY_NAME,
+            this.tlsCiphers == null ? DEFAULT_TLS_CIPHERS : String.join(",", this.tlsCiphers));
         parser.addValue(GENERAL_INI_SECTION, VERIFY_HOSTNAME_INI_KEY_NAME, String.valueOf(this.verifyHostname));
 
         // Add Broker Cert Chain
@@ -1274,6 +1358,18 @@ public class DxlClientConfig {
                 USE_WEBSOCKETS_INI_KEY_NAME, (!webSocketBrokers.isEmpty() && brokers.isEmpty()) ? "true" : "false"));
             dxlClientConfig.tlsMinVersion = normalizeTlsVersion(
                 parser.getValue(GENERAL_INI_SECTION, TLS_MIN_VERSION_INI_KEY_NAME, DEFAULT_TLS_MIN_VERSION));
+            final String configuredCiphers =
+                parser.getValue(GENERAL_INI_SECTION, TLS_CIPHERS_INI_KEY_NAME, DEFAULT_TLS_CIPHERS);
+            try {
+                dxlClientConfig.tlsCiphers = normalizeTlsCiphers(configuredCiphers);
+            } catch (IllegalArgumentException ex) {
+                // A configuration file written by the Python client carries an OpenSSL cipher list
+                // here. Falling back to the JDK defaults keeps such a file usable; the defaults plus
+                // TlsCompatibility cover every broker the Python default covers.
+                logger.warn("Ignoring the " + TLS_CIPHERS_INI_KEY_NAME + " setting: " + ex.getMessage()
+                    + " Using the cipher suites enabled by default.");
+                dxlClientConfig.tlsCiphers = null;
+            }
             dxlClientConfig.verifyHostname = stringToBooleanMap.get(
                 parser.getValue(GENERAL_INI_SECTION, VERIFY_HOSTNAME_INI_KEY_NAME, DEFAULT_VERIFY_HOSTNAME));
 

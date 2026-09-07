@@ -4,6 +4,9 @@
 
 package com.opendxl.client;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import java.io.IOException;
@@ -17,7 +20,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * An {@link SSLSocketFactory} that constrains every socket it creates to a TLS protocol range.
+ * An {@link SSLSocketFactory} that constrains every socket it creates to a TLS protocol range and,
+ * optionally, to a set of cipher suites.
  * <P>
  * The client used to obtain its context with {@code SSLContext.getInstance("TLSv1.2")}, which
  * pins the connection to TLS 1.2 and makes TLS 1.3 unreachable even when both the JDK and the
@@ -30,8 +34,19 @@ import java.util.Set;
  * {@code TlsMinVersion}, default 1.2). Protocol names are the JSSE ones: {@code TLSv1.2},
  * {@code TLSv1.3}.
  * </P>
+ * <P>
+ * The cipher suites come from the {@code TlsCiphers} setting and are JSSE cipher suite names, not
+ * an OpenSSL cipher list (see {@link DxlClientConfig#getTlsCiphers()}). Restricting them to TLS 1.2
+ * suites also keeps TLS 1.3 from being negotiated, because a TLS 1.3 handshake needs one of the
+ * {@code TLS_AES_*} / {@code TLS_CHACHA20_*} suites.
+ * </P>
  */
 class TlsProtocolSocketFactory extends SSLSocketFactory {
+
+    /**
+     * The logger
+     */
+    private static final Logger logger = LogManager.getLogger(TlsProtocolSocketFactory.class);
 
     /**
      * Protocols in ascending order. Anything below TLS 1.2 is deliberately absent: no DXL broker
@@ -55,17 +70,68 @@ class TlsProtocolSocketFactory extends SSLSocketFactory {
     private final boolean verifyHostname;
 
     /**
+     * The cipher suites a socket from this factory may negotiate, or {@code null} for the
+     * cipher suites the JDK enables by default
+     */
+    private final String[] enabledCipherSuites;
+
+    /**
      * Constructs the factory
      *
      * @param delegate The underlying socket factory
      * @param minimumVersion The lowest acceptable TLS version, as a JSSE protocol name
      * @param verifyHostname Whether to verify the broker host name against the certificate
+     * @param cipherSuites The JSSE cipher suite names to enable, or {@code null} for the defaults
+     * @throws IllegalArgumentException If none of the requested cipher suites is supported by the
+     *                                  JDK, because connecting would then silently fall back to the
+     *                                  default suites
      */
     TlsProtocolSocketFactory(final SSLSocketFactory delegate, final String minimumVersion,
-                             final boolean verifyHostname) {
+                             final boolean verifyHostname, final String[] cipherSuites) {
         this.delegate = delegate;
         this.verifyHostname = verifyHostname;
         this.enabledProtocols = protocolsAtOrAbove(minimumVersion, delegate);
+        this.enabledCipherSuites = supportedCipherSuites(cipherSuites, delegate);
+    }
+
+    /**
+     * Returns the requested cipher suites that the JDK actually supports.
+     * <P>
+     * Suites the JDK does not know are dropped (a configuration shared with a newer or older
+     * runtime stays usable); if nothing is left, the connection is refused rather than made with
+     * the default suites, which is what {@code ssl.SSLContext.set_ciphers} does in the Python
+     * client.
+     * </P>
+     *
+     * @param cipherSuites The requested suites, or {@code null}
+     * @param delegate The factory whose supported suites are consulted
+     * @return The suites to enable, or {@code null} for the JDK defaults
+     */
+    private static String[] supportedCipherSuites(final String[] cipherSuites,
+                                                  final SSLSocketFactory delegate) {
+        if (cipherSuites == null || cipherSuites.length == 0) {
+            return null;
+        }
+        final Set<String> supported =
+            new LinkedHashSet<>(Arrays.asList(delegate.getSupportedCipherSuites()));
+        final List<String> enabled = new ArrayList<>();
+        final List<String> unsupported = new ArrayList<>();
+        for (final String suite : cipherSuites) {
+            if (supported.contains(suite)) {
+                enabled.add(suite);
+            } else {
+                unsupported.add(suite);
+            }
+        }
+        if (enabled.isEmpty()) {
+            throw new IllegalArgumentException("None of the configured TLS cipher suites is "
+                + "supported by this JDK: " + String.join(", ", unsupported));
+        }
+        if (!unsupported.isEmpty()) {
+            logger.warn("Ignoring TLS cipher suites that this JDK does not support: "
+                + String.join(", ", unsupported));
+        }
+        return enabled.toArray(new String[0]);
     }
 
     /**
@@ -129,6 +195,9 @@ class TlsProtocolSocketFactory extends SSLSocketFactory {
         if (socket instanceof SSLSocket) {
             final SSLSocket sslSocket = (SSLSocket) socket;
             sslSocket.setEnabledProtocols(this.enabledProtocols);
+            if (this.enabledCipherSuites != null) {
+                sslSocket.setEnabledCipherSuites(this.enabledCipherSuites);
+            }
             if (this.verifyHostname) {
                 final javax.net.ssl.SSLParameters params = sslSocket.getSSLParameters();
                 params.setEndpointIdentificationAlgorithm("HTTPS");
