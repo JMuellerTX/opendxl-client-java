@@ -192,7 +192,8 @@ class UpdateConfigSubcommand extends DxlCliCommand {
 
             // Create a ManagementService instance for communicating with the Management Service
             ManagementService managementService = new ManagementService(this.hostName, this.serverArgs.getPort(),
-                this.serverArgs.getUser(), this.serverArgs.getPassword(), this.serverArgs.getTrustStoreFile());
+                this.serverArgs.getUser(), this.serverArgs.getPassword(),
+                    this.serverArgs.readTrustStorePems(), this.serverArgs.isInsecure());
 
             // Invoke the broker cert chain command on the management service
             String brokerCertChainResponse = managementService.invokeCommand(BROKER_CERT_CHAIN_COMMAND,

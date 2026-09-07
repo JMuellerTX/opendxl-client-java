@@ -36,6 +36,13 @@ class CryptoArgs {
     private String passphrase;
 
     /**
+     * RSA key size in bits for the generated private key
+     */
+    @CommandLine.Option(names = "--key-bits", paramLabel = "BITS",
+            description = "RSA key size in bits: 2048 (default), 3072 or 4096", defaultValue = "2048")
+    private int keyBits;
+
+    /**
      * The country to use in a CSR's Subject DN
      */
     @CommandLine.Option(names = "--country", paramLabel = "COUNTRY",
@@ -150,6 +157,24 @@ class CryptoArgs {
      */
     String getPassphrase() {
         return passphrase;
+    }
+
+    /**
+     * Get the RSA key size in bits for the generated private key
+     *
+     * @return The RSA key size in bits
+     */
+    int getKeyBits() {
+        return keyBits;
+    }
+
+    /**
+     * Set the RSA key size in bits for the generated private key
+     *
+     * @param keyBits The RSA key size in bits (2048, 3072 or 4096)
+     */
+    void setKeyBits(int keyBits) {
+        this.keyBits = keyBits;
     }
 
     /**

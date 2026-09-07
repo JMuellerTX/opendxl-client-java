@@ -60,7 +60,11 @@ class CsrAndPrivateKeyGenerator {
     /**
      * The key length (specified in number of bits)
      */
-    private static final int KEY_BITS = 2048;
+    private static final int DEFAULT_KEY_BITS = 2048;
+    /**
+     * RSA key sizes the CLI accepts (--key-bits)
+     */
+    private static final int[] SUPPORTED_KEY_BITS = {2048, 3072, 4096};
     /**
      * the public exponent
      */
@@ -106,7 +110,7 @@ class CsrAndPrivateKeyGenerator {
      */
     private KeyPair generateKeyPair() throws InvalidAlgorithmParameterException, NoSuchAlgorithmException {
         final AlgorithmParameterSpec spec =
-                new RSAKeyGenParameterSpec(KEY_BITS, BigInteger.valueOf(PUBLIC_EXPONENT));
+                new RSAKeyGenParameterSpec(keyBits(), BigInteger.valueOf(PUBLIC_EXPONENT));
         final KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
         kpg.initialize(spec);
         return kpg.generateKeyPair();
@@ -121,6 +125,24 @@ class CsrAndPrivateKeyGenerator {
      * @throws OperatorCreationException If there is an issue generating the CSR
      * @throws IOException               If there is an issue generating the extensions object
      */
+    /**
+     * The RSA key size to generate: {@code --key-bits} when given, otherwise 2048.
+     *
+     * @return The key size in bits
+     * @throws InvalidAlgorithmParameterException If the requested size is not one of 2048, 3072 or 4096
+     */
+    private int keyBits() throws InvalidAlgorithmParameterException {
+        final int requested = this.cryptoArgs != null && this.cryptoArgs.getKeyBits() > 0
+                ? this.cryptoArgs.getKeyBits() : DEFAULT_KEY_BITS;
+        for (int supported : SUPPORTED_KEY_BITS) {
+            if (supported == requested) {
+                return requested;
+            }
+        }
+        throw new InvalidAlgorithmParameterException(
+                "Unsupported RSA key size: " + requested + " (supported: 2048, 3072, 4096)");
+    }
+
     private PKCS10CertificationRequest generateCSR(String commonName, KeyPair keyPair)
             throws OperatorCreationException, IOException {
         // Switch to X509v3CertificateBuilder ???
