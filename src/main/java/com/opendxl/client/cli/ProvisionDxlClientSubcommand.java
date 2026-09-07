@@ -261,7 +261,8 @@ class ProvisionDxlClientSubcommand extends DxlCliCommand {
 
             // Get the CSR signed by the management service
             ManagementService managementService = new ManagementService(this.hostName, this.serverArgs.getPort(),
-                    this.serverArgs.getUser(), this.serverArgs.getPassword(), this.serverArgs.getTrustStoreFile());
+                    this.serverArgs.getUser(), this.serverArgs.getPassword(),
+                    this.serverArgs.readTrustStorePems(), this.serverArgs.isInsecure());
             String provisionCommandResults = managementService.invokeCommand(PROVISION_COMMAND,
                     Collections.singletonList(new BasicNameValuePair(CSR_STRING_PARAMETER_NAME, csrAsString)));
 

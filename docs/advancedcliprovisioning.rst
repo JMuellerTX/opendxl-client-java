@@ -95,17 +95,21 @@ The output of the command above should appear similar to the following::
     INFO: Saving ca bundle file to config/ca-bundle.crt
     INFO: Saving client certificate file to config/theclient.crt
 
-If the management server's CA certificate is stored in a local CA truststore
-file -- one or more PEM-formatted certificates concatenated together into a
-single file -- the provision operation can be configured to validate
-the management server's certificate against that truststore during TLS session
-negotiation by supplying the ``-e`` option.
-
-The name of the truststore file should be supplied along with the option:
+The management server's certificate is validated during TLS session
+negotiation. By default it is validated against the JVM's trusted CAs.
+Management servers commonly use a certificate issued by a private CA -- an
+ePO server, for example, issues its web certificate from its own server CA --
+which the JVM does not trust. Export that CA as a PEM file (one or more
+certificates concatenated) and supply it with the ``-e`` option:
 
     .. parsed-literal::
 
-        java -jar dxlclient-\ |version|\-all.jar config myserver -e config/ca-bundle.crt
+        java -jar dxlclient-\ |version|\-all.jar provisionconfig config myserver client1 -e epo-ca.pem
+
+The host name given on the command line must match the certificate; an IP
+address usually does not. Validation can be disabled with ``--insecure``, which
+is not recommended because it leaves the transport of the credentials and of the
+returned certificates unprotected against interception.
 
     .. note::
 
