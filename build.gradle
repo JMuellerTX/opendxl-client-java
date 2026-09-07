@@ -280,6 +280,12 @@ test {
     systemProperty 'clientConfig', "${rootDir}/clientconfig/dxlclient.config"
     // The CLI tests compare the usage help text; keep picocli from emitting ANSI escape codes
     systemProperty 'picocli.ansi', 'false'
+    // The client retries a failed connect forever by default (-1). In the test
+    // suite that turns an unreachable or misconfigured broker into a hang
+    // instead of a failure (CI run 34094784095 sat for 90 minutes reconnecting).
+    // Ten attempts with the back-off capped at 5 s give up after about 45 s.
+    systemProperty 'dxlClient.connectRetries', '10'
+    systemProperty 'dxlClient.maxReconnectDelay', '5000'
 
     // Exclude the Proxy Usage Verification Test
     exclude "**/ProxyUsageVerificationTest.class"
@@ -296,5 +302,7 @@ test {
 task proxyUsageVerificationTest(type: Test) {
     systemProperty 'clientConfig', "${rootDir}/clientconfig/dxlclient.config"
     systemProperty 'picocli.ansi', 'false'
+    systemProperty 'dxlClient.connectRetries', '10'
+    systemProperty 'dxlClient.maxReconnectDelay', '5000'
     include "**/ProxyUsageVerificationTest.class"
 }
