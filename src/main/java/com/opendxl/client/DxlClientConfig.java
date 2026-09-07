@@ -947,8 +947,15 @@ public class DxlClientConfig {
         parser.addValue(GENERAL_INI_SECTION, USE_WEBSOCKETS_INI_KEY_NAME, String.valueOf(this.useWebSockets));
         // Add the TLS settings
         parser.addValue(GENERAL_INI_SECTION, TLS_MIN_VERSION_INI_KEY_NAME, this.tlsMinVersion);
-        parser.addValue(GENERAL_INI_SECTION, TLS_CIPHERS_INI_KEY_NAME,
-            this.tlsCiphers == null ? DEFAULT_TLS_CIPHERS : String.join(",", this.tlsCiphers));
+        // Only written when cipher suites were actually configured. Writing
+        // "TlsCiphers = default" would change what a *Python* client reading the same file
+        // does: there the value selects the ssl module's defaults, which no longer contain
+        // AES128-SHA256, so a shared configuration would stop reaching a broker older than
+        // DXL 6.1.1. An absent key leaves each client with its own default.
+        if (this.tlsCiphers != null) {
+            parser.addValue(GENERAL_INI_SECTION, TLS_CIPHERS_INI_KEY_NAME,
+                String.join(",", this.tlsCiphers));
+        }
         parser.addValue(GENERAL_INI_SECTION, VERIFY_HOSTNAME_INI_KEY_NAME, String.valueOf(this.verifyHostname));
 
         // Add Broker Cert Chain
