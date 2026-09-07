@@ -40,11 +40,13 @@ class SSLValidationSocketFactory {
      * @param keyStorePassword The keystore password
      * @param tlsMinVersion The lowest TLS version to negotiate, as a JSSE protocol name
      * @param verifyHostname Whether to verify the broker host name against the certificate
+     * @param tlsCiphers The JSSE cipher suite names to enable, or {@code null} for the JDK defaults
      * @return A new instance of an {@link javax.net.ssl.SSLSocketFactory} that validates presented certificates.
      * @throws Exception If an SSL exception occurs
      */
     public static SSLSocketFactory newInstance(final KeyStore keyStore, final String keyStorePassword,
-                                               final String tlsMinVersion, final boolean verifyHostname)
+                                               final String tlsMinVersion, final boolean verifyHostname,
+                                               final String[] tlsCiphers)
         throws Exception {
 
         // OpenDXL brokers only offer cipher suites with RSA key exchange, which current JDKs disable by default
@@ -61,6 +63,7 @@ class SSLValidationSocketFactory {
         // context to "TLSv1.2" here is what previously made TLS 1.3 unreachable.
         final SSLContext sslContext = SSLContext.getInstance("TLS");
         sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), secureRandom);
-        return new TlsProtocolSocketFactory(sslContext.getSocketFactory(), tlsMinVersion, verifyHostname);
+        return new TlsProtocolSocketFactory(sslContext.getSocketFactory(), tlsMinVersion, verifyHostname,
+            tlsCiphers);
     }
 }
