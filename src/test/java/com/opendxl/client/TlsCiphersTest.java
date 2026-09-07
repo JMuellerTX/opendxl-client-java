@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -129,8 +130,13 @@ public class TlsCiphersTest extends AbstractDxlTest {
         final DxlClientConfig reread = DxlClientConfig.createDxlConfigFromFile(written.getPath());
         assertArrayEquals(config.getTlsCiphers(), reread.getTlsCiphers());
 
+        // "default" must not end up in the file: a Python client reading the same
+        // configuration would take TlsCiphers=default as "the ssl module's defaults" and lose
+        // the AES128-SHA256 fallback it needs for brokers older than DXL 6.1.1.
         config.setTlsCiphers("default");
         config.write(written.getPath());
+        assertFalse(new String(Files.readAllBytes(written.toPath()), StandardCharsets.UTF_8)
+            .contains("TlsCiphers"));
         assertNull(DxlClientConfig.createDxlConfigFromFile(written.getPath()).getTlsCiphers());
     }
 
