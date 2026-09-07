@@ -64,12 +64,16 @@ repositories {
     mavenCentral()
 }
 
-// Jar Manifest info
+// Jar Manifest info (the shadow jar inherits it)
 jar {
     manifest {
         attributes('Main-Class': 'com.opendxl.client.cli.CommandLineInterface',
                 'Implementation-Title': project.name,
-                'Implementation-Version': project.version
+                'Implementation-Version': project.version,
+                // log4j-api ships its Java 9+ classes under META-INF/versions/9. Without this
+                // attribute a JVM ignores them and log4j falls back to a mode in which the
+                // CLI's INFO and WARN output is lost (only ERROR is still printed).
+                'Multi-Release': 'true'
         )
     }
 }
