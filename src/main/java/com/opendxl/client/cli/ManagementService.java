@@ -34,13 +34,17 @@ import org.apache.http.impl.client.LaxRedirectStrategy;
 import org.apache.http.impl.conn.DefaultProxyRoutePlanner;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.ssl.SSLContexts;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -111,6 +115,11 @@ class ManagementService {
     private static final String[] SUPPORTED_PROTOCOLS = new String[] {"TLSv1.2", "TLSv1.3"};
 
     /**
+     * The logger
+     */
+    private static Logger logger = LogManager.getLogger(MethodHandles.lookup().lookupClass());
+
+    /**
      * Management Service host (FQDN or IP address)
      */
     private String host;
@@ -127,9 +136,13 @@ class ManagementService {
      */
     private String password;
     /**
-     * The location of the file containing certificates used to do HTTPS certificate validation
+     * PEM CA certificates used to validate the Management Service's certificate ({@code null}: JVM trusted CAs)
      */
-    private String trustStoreFile;
+    private String caCertificatePems;
+    /**
+     * Whether validation of the Management Service's certificate is disabled
+     */
+    private boolean insecure;
     /**
      * The base URL for the Management Service
      */
@@ -140,31 +153,31 @@ class ManagementService {
     private CloseableHttpClient httpClient;
 
     /**
-     * Constructor for the Management Service
+     * Constructor for the ManagementService object
      *
-     * @param host           Management Service host (FQDN or IP address)
-     * @param port           Management Service port
-     * @param userName       The user name for authenticating with the Management Service
-     * @param password       The password for authenticating with the Management Services
-     * @param trustStoreFile The location of the file containing certificates used to HTTPS certificate validation
-     * @throws CertificateException     If there is an error creating certificates from the certificates in the
-     *                                  trust store file
-     * @throws NoSuchAlgorithmException If there is an issue creating a certificate trust manager
-     * @throws KeyStoreException        If there is an error creating a key store from the certificates in the
-     *                                  trust store file
-     * @throws KeyManagementException   If there is an error creating a key store from the certificates in the
-     *                                  trust store file
-     * @throws IOException              If there is an error creating a key store from the certificates in the
-     *                                  trust store file
+     * @param host The hostname of the Management Service to run remote commands on
+     * @param port The port of the desired Management Service
+     * @param userName The username to run the remote commands as
+     * @param password The password for the Management Service user
+     * @param caCertificatePems One or more PEM CA certificates used to validate the Management Service's
+     *                          certificate, or {@code null} to validate against the JVM's trusted CAs
+     * @param insecure {@code true} to skip validation of the Management Service's certificate entirely
+     * @throws CertificateException If there is an issue with the CA certificates
+     * @throws NoSuchAlgorithmException If there is an issue creating the TLS context
+     * @throws KeyStoreException If there is an issue creating the trust store
+     * @throws KeyManagementException If there is an issue creating the TLS context
+     * @throws IOException If there is an issue creating the trust store
      */
-    ManagementService(String host, int port, String userName, String password, String trustStoreFile)
+    ManagementService(String host, int port, String userName, String password, String caCertificatePems,
+                      boolean insecure)
             throws CertificateException, NoSuchAlgorithmException, KeyStoreException, KeyManagementException,
             IOException {
         this.host = host;
         this.port = port;
         this.userName = userName;
         this.password = password;
-        this.trustStoreFile = trustStoreFile;
+        this.caCertificatePems = caCertificatePems;
+        this.insecure = insecure;
         this.baseUrl = "https://" + this.host + ":" + this.port + "/remote";
 
         // Create the http client
@@ -178,19 +191,13 @@ class ManagementService {
      */
     private CloseableHttpClient createTlsHttpClient() throws NoSuchAlgorithmException, CertificateException,
             KeyStoreException, IOException, KeyManagementException {
-        TrustManager[] tm;
+        // null: the JVM's default trust store
+        TrustManager[] tm = null;
+        boolean hostNameValidation = true;
 
-        // Create a trust manager with the certificate chain
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-
-        // By default host name validation is false
-        boolean hostNameValidation = false;
-
-        if (StringUtils.isNotBlank(this.trustStoreFile)) {
-            tmf.init(createKeystore(this.trustStoreFile));
-            tm = tmf.getTrustManagers();
-            hostNameValidation = true;
-        } else {
+        if (this.insecure) {
+            logger.warn("Certificate validation for the management server is disabled (--insecure)");
+            hostNameValidation = false;
             tm = new TrustManager[] {
                     new X509TrustManager() {
                         public void checkClientTrusted(
@@ -206,9 +213,14 @@ class ManagementService {
                         }
                     }
             };
+        } else if (StringUtils.isNotBlank(this.caCertificatePems)) {
+            // Trust certificates signed by the CA(s) the user named explicitly
+            final TrustManagerFactory tmf =
+                    TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(createKeystore(this.caCertificatePems));
+            tm = tmf.getTrustManagers();
         }
 
-        // Trust certs signed by the provided CA chain
         final SSLContext sslcontext = SSLContexts.createDefault();
         sslcontext.init(null, tm, null);
 
@@ -380,13 +392,19 @@ class ManagementService {
         request.setHeader(HttpHeaders.AUTHORIZATION, "Basic " + credentials);
 
         // Send the request
-        try (CloseableHttpResponse response = this.httpClient.execute(request)) {
-            final int httpStatus = response.getStatusLine().getStatusCode();
+        final CloseableHttpResponse response;
+        try {
+            response = this.httpClient.execute(request);
+        } catch (SSLException ex) {
+            throw new IOException(tlsFailureMessage(ex), ex);
+        }
+        try (CloseableHttpResponse closingResponse = response) {
+            final int httpStatus = closingResponse.getStatusLine().getStatusCode();
             if (httpStatus < 200 || httpStatus >= 300) {
-                throw new IOException("HTTP Request failed: " + response.getStatusLine().toString());
+                throw new IOException("HTTP Request failed: " + closingResponse.getStatusLine().toString());
             }
 
-            String httpResponseBody = new BasicResponseHandler().handleResponse(response);
+            String httpResponseBody = new BasicResponseHandler().handleResponse(closingResponse);
 
             final int colonDelimiterLocation = httpResponseBody.indexOf(COLON_DELIMITER);
             if (colonDelimiterLocation == -1) {
@@ -407,4 +425,28 @@ class ManagementService {
             }
         }
     }
+
+    /**
+     * Build the message for a failed TLS handshake with the Management Service, including what the user can do
+     * about it.
+     *
+     * @param error The error raised by the HTTP client
+     * @return The message
+     */
+    private String tlsFailureMessage(SSLException error) {
+        final StringBuilder message = new StringBuilder(String.format(
+                "TLS handshake with the management server %s:%d failed: %s.", this.host, this.port,
+                error.getMessage()));
+        if (StringUtils.isBlank(this.caCertificatePems)) {
+            message.append(" The server certificate is not trusted by the JVM's CAs. If the server uses a")
+                    .append(" certificate from a private CA (for example the ePO server CA), pass that CA's PEM")
+                    .append(" file with -e/--truststore. --insecure disables validation entirely.");
+        } else {
+            message.append(" The server certificate could not be validated against the truststore given with -e.")
+                    .append(" Make sure the file contains the CA that issued the server certificate and that the")
+                    .append(" host name used matches the certificate (an IP address usually does not).");
+        }
+        return message.toString();
+    }
+
 }

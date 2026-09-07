@@ -7,7 +7,10 @@ package com.opendxl.client.cli;
 import org.apache.commons.lang3.StringUtils;
 import picocli.CommandLine;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 /**
  * Class containing members used for cli subcommands which communicating with a server require,
@@ -37,12 +40,22 @@ class ServerArgs {
     private int port;
 
     /**
-     * Name of file containing one or more CA pems to use in validating the management server
+     * File with one or more PEM CA certificates used to validate the management server's certificate. Without it
+     * the certificate is validated against the JVM's trusted CAs.
      */
     @CommandLine.Option(names = {"-e", "--truststore"}, paramLabel = "TRUSTSTORE_FILE",
-            description = "Name of file containing one or more CA pems to use in validating the management server",
-            defaultValue = "")
+            description = "File with one or more PEM CA certificates used to validate the management server's "
+                    + "certificate (for a certificate issued by a private CA, e.g. the ePO server CA). Without this "
+                    + "option the certificate is validated against the JVM's trusted CAs.")
     private String trustStoreFile;
+
+    /**
+     * Whether to skip validation of the management server's certificate entirely
+     */
+    @CommandLine.Option(names = "--insecure",
+            description = "Do not validate the management server's certificate at all (not recommended; use -e with "
+                    + "the server's CA instead)")
+    private boolean insecure;
 
     /**
      * Get the user registered at the management service
@@ -114,6 +127,46 @@ class ServerArgs {
      */
     void setTrustStoreFile(String trustStoreFile) {
         this.trustStoreFile = trustStoreFile;
+    }
+
+    /**
+     * Whether validation of the management server's certificate was disabled with {@code --insecure}
+     *
+     * @return {@code true} if validation is disabled
+     */
+    boolean isInsecure() {
+        return insecure;
+    }
+
+    /**
+     * Set whether validation of the management server's certificate is disabled
+     *
+     * @param insecure {@code true} to disable validation
+     */
+    void setInsecure(boolean insecure) {
+        this.insecure = insecure;
+    }
+
+    /**
+     * Read the CA certificates named with {@code -e/--truststore}.
+     *
+     * @return the PEM content of the truststore file, or {@code null} when the option was not given (the
+     * management server's certificate is then validated against the JVM's trusted CAs)
+     * @throws IOException if the file does not exist or cannot be read
+     * @throws IllegalArgumentException if {@code --insecure} and {@code -e/--truststore} were both given
+     */
+    String readTrustStorePems() throws IOException {
+        if (StringUtils.isBlank(trustStoreFile)) {
+            return null;
+        }
+        if (insecure) {
+            throw new IllegalArgumentException("--insecure and -e/--truststore cannot be combined");
+        }
+        final File file = new File(trustStoreFile);
+        if (!file.isFile()) {
+            throw new IOException("Truststore file not found: " + trustStoreFile);
+        }
+        return new String(Files.readAllBytes(file.toPath()), StandardCharsets.US_ASCII);
     }
 
     /**
