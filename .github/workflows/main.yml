@@ -19,6 +19,7 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     strategy:
       matrix:
         java-version: [ 8 ]
@@ -65,7 +66,7 @@ jobs:
         cat clientconfig/dxlclient.config
         echo Running tests with MQTT
         ./gradlew test --info --stacktrace --console=plain
-        sed -i -e "s/= false/= true/g" clientconfig/dxlclient.config
+        sed -i -e "s/^UseWebSockets *= *false/UseWebSockets = true/" clientconfig/dxlclient.config
         cat clientconfig/dxlclient.config
         echo Running tests with WebSockets and no proxy
         ./gradlew cleanTest test --info --stacktrace --console=plain
@@ -85,7 +86,7 @@ jobs:
         echo Running tests with MQTT and authenticated proxy
         ./gradlew cleanTest test --info --stacktrace --console=plain
         echo Changing config to use WebSockets
-        sed -i -e "s/= false/= true/g" clientconfig/dxlclient.config
+        sed -i -e "s/^UseWebSockets *= *false/UseWebSockets = true/" clientconfig/dxlclient.config
         cat clientconfig/dxlclient.config
         echo Running Proxy Usage Verification Test for WebSocket connections
         ./gradlew proxyUsageVerificationTest --stacktrace --info --console=plain
