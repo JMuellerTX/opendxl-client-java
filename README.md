@@ -34,7 +34,7 @@ listed under [Branches](#branches).
 opendxl.com domain and belongs to the upstream project. The fork's artifacts keep the same coordinates - so the
 jar drops into an existing build - and carry a `-fork.n` version marker, and they are published to this
 repository's GitHub Packages registry and attached to its
-[releases](https://github.com/derjochenmueller/opendxl-client-java/releases).
+[releases](https://github.com/JMuellerTX/opendxl-client-java/releases).
 
 Maven:
 
