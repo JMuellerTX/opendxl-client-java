@@ -227,6 +227,7 @@ publishing {
     }
     repositories {
         maven {
+            name = "buildDir"
             url = "$buildDir/repo"
 
 //            def releasesRepoUrl = "https://oss.sonatype.org/service/local/staging/deploy/maven2"
@@ -236,6 +237,19 @@ publishing {
 //                username sonatypeUsername
 //                password sonatypePassword
 //            }
+        }
+        // Only defined when the release workflow provides the environment. Nothing is ever
+        // published to Maven Central from here: the com.opendxl namespace there is proven by
+        // control of the opendxl.com domain and belongs to the upstream project.
+        if (System.getenv("GITHUB_PACKAGES_URL")) {
+            maven {
+                name = "GitHubPackages"
+                url = System.getenv("GITHUB_PACKAGES_URL")
+                credentials {
+                    username = System.getenv("GITHUB_ACTOR")
+                    password = System.getenv("GITHUB_TOKEN")
+                }
+            }
         }
     }
 }
@@ -259,7 +273,22 @@ task replaceVersionInREADME() {
     }
 }
 
-signing { sign publishing.publications.maven }
+signing {
+    // Signatures are mandatory for Maven Central and optional for GitHub Packages. Signing
+    // unconditionally made every publish task fail on a machine without a keyring, so the
+    // signature is produced when - and only when - a key is available: the SIGNING_KEY /
+    // SIGNING_PASSWORD environment (an ASCII-armoured private key, e.g. from a repository
+    // secret) or the usual signing.keyId/signing.password Gradle properties. Publishing a
+    // signed jar is worth the setup: a consumer can then tell this fork's artifacts from
+    // anything else that appears under the same coordinates.
+    def signingKey = System.getenv("SIGNING_KEY")
+    def signingPassword = System.getenv("SIGNING_PASSWORD")
+    required { signingKey != null || project.hasProperty("signing.keyId") }
+    if (signingKey != null) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+    }
+    sign publishing.publications.maven
+}
 
 // Tasks To Declare implicit_dependency necessary after Gradle 7.1
 tasks.named('distTar') {

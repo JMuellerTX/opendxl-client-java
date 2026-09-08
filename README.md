@@ -26,9 +26,15 @@ To start using the OpenDXL Java client:
 
 ## Maven Repository
 
-Visit the [OpenDXL Java Client Maven Repository](https://search.maven.org/artifact/com.opendxl/dxlclient) for
-access to all released versions including the appropriate dependency syntax for a large number of management 
-systems (Maven, Gradle, SBT, Ivy, Grape, etc.).
+The [OpenDXL Java Client Maven Repository](https://search.maven.org/artifact/com.opendxl/dxlclient) on Maven
+Central carries the upstream releases; the newest one there is 0.2.6 (December 2020) and has none of the fixes
+listed under [Branches](#branches).
+
+**This fork is not published to Maven Central.** The `com.opendxl` namespace there is proven by control of the
+opendxl.com domain and belongs to the upstream project. The fork's artifacts keep the same coordinates - so the
+jar drops into an existing build - and carry a `-fork.n` version marker, and they are published to this
+repository's GitHub Packages registry and attached to its
+[releases](https://github.com/derjochenmueller/opendxl-client-java/releases).
 
 Maven:
 
@@ -36,12 +42,12 @@ Maven:
 <dependency>
   <groupId>com.opendxl</groupId>
   <artifactId>dxlclient</artifactId>
-  <version>0.2.9</version>
+  <version>0.2.9-fork.1</version>
 </dependency>
 ```
 or Gradle:
 ```groovy
-compile 'com.opendxl:dxlclient:0.2.9'
+compile 'com.opendxl:dxlclient:0.2.9-fork.1'
 ```
 
 ## Branches
