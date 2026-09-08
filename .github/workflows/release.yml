@@ -54,12 +54,36 @@ jobs:
     - name: Build
       run: ./gradlew assemble javadocJar sourceJar --console=plain
 
+    # A version in GitHub Packages is immutable, so re-running a release for a tag
+    # that was already published answers 409 Conflict and fails the whole job -
+    # which also skips the steps below it. That happened for real when the
+    # repository moved to another account: the Maven package follows the
+    # repository, so all four JDK lines were already there. Publishing is skipped
+    # when the exact artifact exists; anything other than "present" or "absent"
+    # still fails, so a genuine registry problem is not swallowed.
     - name: Publish to GitHub Packages
       env:
         GITHUB_ACTOR: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_PACKAGES_URL: https://maven.pkg.github.com/${{ github.repository }}
-      run: ./gradlew publishMavenPublicationToGitHubPackagesRepository --console=plain
+      run: |
+        set -eu
+        version="$(sed -n 's/^version=//p' gradle.properties)"
+        url="https://maven.pkg.github.com/${{ github.repository }}/com/opendxl/dxlclient/${version}/dxlclient-${version}.jar"
+        code="$(curl -sS -o /dev/null -w '%{http_code}' -L -u "$GITHUB_ACTOR:$GITHUB_TOKEN" "$url")"
+        case "$code" in
+          200)
+            echo "dxlclient $version is already in GitHub Packages - nothing to publish."
+            echo "  $url"
+            ;;
+          404)
+            ./gradlew publishMavenPublicationToGitHubPackagesRepository --console=plain
+            ;;
+          *)
+            echo "Unexpected status $code from the package registry for $url" >&2
+            exit 1
+            ;;
+        esac
 
     - name: Collect the artifacts
       run: |
