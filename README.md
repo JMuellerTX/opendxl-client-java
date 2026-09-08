@@ -42,12 +42,12 @@ Maven:
 <dependency>
   <groupId>com.opendxl</groupId>
   <artifactId>dxlclient</artifactId>
-  <version>0.2.9-fork.1</version>
+  <version>0.2.9-fork.1-jdk17</version>
 </dependency>
 ```
 or Gradle:
 ```groovy
-compile 'com.opendxl:dxlclient:0.2.9-fork.1'
+compile 'com.opendxl:dxlclient:0.2.9-fork.1-jdk17'
 ```
 
 ## Branches
