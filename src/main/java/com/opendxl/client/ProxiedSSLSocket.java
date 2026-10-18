@@ -65,7 +65,7 @@ class ProxiedSSLSocket extends SSLSocket {
             throw new IOException(t);
         }
         this.socket = (SSLSocket) socketFactory.createSocket(proxySocket,
-            ((InetSocketAddress) socketAddress).getHostName(), ((InetSocketAddress) socketAddress).getPort(), true);
+            ((InetSocketAddress) socketAddress).getHostString(), ((InetSocketAddress) socketAddress).getPort(), true);
     }
 
     /**
@@ -377,7 +377,11 @@ class ProxiedSSLSocket extends SSLSocket {
      */
     @Override
     public void setSoTimeout(int i) throws SocketException {
-//        this.socket.setSoTimeout(i); // TODO ?
+        if (this.socket != null) {
+            this.socket.setSoTimeout(i);
+        } else if (this.proxySocket != null) {
+            this.proxySocket.setSoTimeout(i);
+        }
     }
 
     /**
@@ -385,7 +389,10 @@ class ProxiedSSLSocket extends SSLSocket {
      */
     @Override
     public int getSoTimeout() throws SocketException {
-        return this.socket.getSoTimeout();
+        if (this.socket != null) {
+            return this.socket.getSoTimeout();
+        }
+        return this.proxySocket != null ? this.proxySocket.getSoTimeout() : 0;
     }
 
     /**
@@ -473,7 +480,11 @@ class ProxiedSSLSocket extends SSLSocket {
      */
     @Override
     public void close() throws IOException {
-        this.socket.close();
+        if (this.socket != null) {
+            this.socket.close();
+        } else if (this.proxySocket != null) {
+            this.proxySocket.close();
+        }
     }
 
     /**
@@ -497,7 +508,7 @@ class ProxiedSSLSocket extends SSLSocket {
      */
     @Override
     public String toString() {
-        return this.socket.toString();
+        return this.socket != null ? this.socket.toString() : super.toString();
     }
 
     /**
@@ -505,7 +516,7 @@ class ProxiedSSLSocket extends SSLSocket {
      */
     @Override
     public boolean isConnected() {
-        return this.socket.isConnected();
+        return this.socket != null && this.socket.isConnected();
     }
 
     /**
@@ -513,7 +524,8 @@ class ProxiedSSLSocket extends SSLSocket {
      */
     @Override
     public boolean isBound() {
-        return this.socket.isBound();
+        return this.socket != null ? this.socket.isBound()
+            : (this.proxySocket != null && this.proxySocket.isBound());
     }
 
     /**
@@ -521,7 +533,8 @@ class ProxiedSSLSocket extends SSLSocket {
      */
     @Override
     public boolean isClosed() {
-        return this.socket.isClosed();
+        return this.socket != null ? this.socket.isClosed()
+            : (this.proxySocket != null && this.proxySocket.isClosed());
     }
 
     /**
@@ -529,7 +542,7 @@ class ProxiedSSLSocket extends SSLSocket {
      */
     @Override
     public boolean isInputShutdown() {
-        return this.socket.isInputShutdown();
+        return this.socket != null && this.socket.isInputShutdown();
     }
 
     /**
@@ -537,7 +550,7 @@ class ProxiedSSLSocket extends SSLSocket {
      */
     @Override
     public boolean isOutputShutdown() {
-        return this.socket.isOutputShutdown();
+        return this.socket != null && this.socket.isOutputShutdown();
     }
 
     /**

@@ -122,18 +122,18 @@ abstract class CallbackManager<T extends MessageCallback, MT extends Message> {
                         this.callbacksByTopic.remove(topicName);
                     }
 
-                    return true;
-                }
-            }
-
-            // Determine if any wildcards exist
-            if (this.wildcardingEnabled) {
-                this.wildcardingEnabled = false;
-                for (final String currTopicName : this.callbacksByTopic.keySet()) {
-                    if (hasWildcard(currTopicName)) {
-                        this.wildcardingEnabled = true;
-                        break;
+                    // Determine if any wildcards exist
+                    if (this.wildcardingEnabled) {
+                        this.wildcardingEnabled = false;
+                        for (final String currTopicName : this.callbacksByTopic.keySet()) {
+                            if (hasWildcard(currTopicName)) {
+                                this.wildcardingEnabled = true;
+                                break;
+                            }
+                        }
                     }
+
+                    return true;
                 }
             }
         } finally {
@@ -153,11 +153,15 @@ abstract class CallbackManager<T extends MessageCallback, MT extends Message> {
 
         Set<T> globalListeners;
         Set<T> topicListeners;
+        final boolean hasWildcards;
 
         managerLock.readLock().lock();
         try {
-            globalListeners = this.callbacksByTopic.get(null);
-            topicListeners = this.callbacksByTopic.get(destinationTopic);
+            final Set<T> registeredGlobal = this.callbacksByTopic.get(null);
+            globalListeners = registeredGlobal != null ? new HashSet<>(registeredGlobal) : null;
+            final Set<T> registeredTopic = this.callbacksByTopic.get(destinationTopic);
+            topicListeners = registeredTopic != null ? new HashSet<>(registeredTopic) : null;
+            hasWildcards = this.wildcardingEnabled;
         } finally {
             managerLock.readLock().unlock();
         }
@@ -170,13 +174,15 @@ abstract class CallbackManager<T extends MessageCallback, MT extends Message> {
             topicListeners, message);
 
         // Fire for all wildcarded topics
-        if (this.wildcardingEnabled) {
+        if (hasWildcards) {
             DxlUtils.iterateWildcards(
                 wildcard -> {
                     Set<T> wildCardListeners;
                     managerLock.readLock().lock();
                     try {
-                        wildCardListeners = this.callbacksByTopic.get(wildcard);
+                        final Set<T> registeredWildcard = this.callbacksByTopic.get(wildcard);
+                        wildCardListeners =
+                            registeredWildcard != null ? new HashSet<>(registeredWildcard) : null;
                     } finally {
                         managerLock.readLock().unlock();
                     }
