@@ -4,6 +4,10 @@
 
 package com.opendxl.client;
 
+import com.opendxl.client.callback.EventCallback;
+import com.opendxl.client.callback.RequestCallback;
+import com.opendxl.client.exception.DxlException;
+import com.opendxl.client.message.Event;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -13,11 +17,14 @@ import javax.net.ssl.SSLSocketFactory;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -140,7 +147,119 @@ public class TlsCiphersTest extends AbstractDxlTest {
             .contains("TlsCiphers"));
         final DxlClientConfig rereadWithId = DxlClientConfig.createDxlConfigFromFile(written.getPath());
         assertNull(rereadWithId.getTlsCiphers());
-        org.junit.Assert.assertEquals("{custom-client-id}", rereadWithId.getUniqueId());
+        assertEquals("{custom-client-id}", rereadWithId.getUniqueId());
+    }
+
+    /**
+     * In-place write round-trip preserves relative certificate paths, IniParser replaces keys
+     * case-insensitively without duplicates, and invalid boolean settings raise DxlException.
+     *
+     * @throws Exception If an error occurs
+     */
+    @Test
+    public void testInPlaceWriteRoundTripAndInvalidBooleans() throws Exception {
+        final File configFile = writeConfigFile(ECDHE_SUITE);
+        final DxlClientConfig config = DxlClientConfig.createDxlConfigFromFile(configFile.getPath());
+        config.write(configFile.getPath());
+        final DxlClientConfig reread = DxlClientConfig.createDxlConfigFromFile(configFile.getPath());
+        assertEquals(config.getBrokerCaBundlePath(), reread.getBrokerCaBundlePath());
+
+        // IniParser case-insensitive replacement on existing read parser
+        final IniParser parser = new IniParser();
+        parser.read(configFile.getPath());
+        parser.addValue("General", "VerifyHostname", "true");
+        parser.write(configFile.getPath());
+        final DxlClientConfig afterParserWrite = DxlClientConfig.createDxlConfigFromFile(configFile.getPath());
+        assertTrue(afterParserWrite.isVerifyHostname());
+
+        // Invalid boolean value in UseWebSockets should throw DxlException, not NullPointerException
+        final String invalidBoolContents = "[General]\n"
+            + "UseWebSockets=notabool\n"
+            + "[Certs]\n"
+            + "BrokerCertChain=ca.crt\n"
+            + "CertFile=client.crt\n"
+            + "PrivateKey=client.key\n"
+            + "[Brokers]\n"
+            + "unit-test=unit-test;8883;localhost;127.0.0.1\n";
+        Files.write(configFile.toPath(), invalidBoolContents.getBytes(StandardCharsets.UTF_8));
+        try {
+            DxlClientConfig.createDxlConfigFromFile(configFile.getPath());
+            fail("Expected DxlException for invalid boolean value");
+        } catch (final DxlException ex) {
+            assertTrue(ex.getCause() != null && ex.getCause().getMessage().contains("UseWebSockets"));
+        }
+    }
+
+    /**
+     * ServiceManager.removeService unsubscribes and removes the request callback when the service
+     * is the last active user of a topic.
+     *
+     * @throws Exception If an error occurs
+     */
+    @Test
+    public void testServiceManagerRemoveServiceUnsubscribesTopic() throws Exception {
+        final List<String> removedCallbackTopics = new ArrayList<>();
+        final DxlClient stubClient = new DxlClient(newConfig(), false) {
+            @Override
+            public void addRequestCallback(final String topic, final RequestCallback callback) {
+                // no-op
+            }
+
+            @Override
+            public void removeRequestCallback(final String topic, final RequestCallback callback) {
+                removedCallbackTopics.add(topic);
+            }
+
+            @Override
+            public boolean isConnected() {
+                return false;
+            }
+        };
+
+        final ServiceManager manager = new ServiceManager(stubClient);
+        final ServiceRegistrationInfo info = new ServiceRegistrationInfo(stubClient, "/test/service");
+        info.addTopic("/test/service/topic", request -> { });
+
+        manager.addService(info);
+        assertTrue(stubClient.getSubscriptions().contains("/test/service/topic"));
+
+        manager.removeService(info.getServiceId());
+        assertFalse(stubClient.getSubscriptions().contains("/test/service/topic"));
+        assertEquals(Collections.singletonList("/test/service/topic"), removedCallbackTopics);
+    }
+
+    /**
+     * CallbackManager.removeCallback updates wildcard state and fireMessage snapshots listeners
+     * safely when a callback mutates registrations during firing.
+     */
+    @Test
+    public void testCallbackManagerRemoveCallbackAndConcurrentFire() {
+        final CallbackManager.EventCallbackManager callbackManager =
+            new CallbackManager.EventCallbackManager();
+        final AtomicInteger wildcardCount = new AtomicInteger(0);
+        final EventCallback wildcardCb = event -> wildcardCount.incrementAndGet();
+
+        callbackManager.addCallback("/test/#", wildcardCb);
+        assertTrue(callbackManager.removeCallback("/test/#", wildcardCb));
+        assertFalse(callbackManager.removeCallback("/test/#", wildcardCb));
+
+        final Event event = new Event("/test/subtopic");
+        callbackManager.fireMessage(event);
+        assertEquals(0, wildcardCount.get());
+
+        // Callback that removes itself during fireMessage must not cause ConcurrentModificationException
+        final AtomicInteger fireCount = new AtomicInteger(0);
+        final EventCallback[] selfRemovingHolder = new EventCallback[1];
+        selfRemovingHolder[0] = ev -> {
+            fireCount.incrementAndGet();
+            callbackManager.removeCallback("/test/subtopic", selfRemovingHolder[0]);
+        };
+        final EventCallback secondCb = ev -> fireCount.incrementAndGet();
+        callbackManager.addCallback("/test/subtopic", selfRemovingHolder[0]);
+        callbackManager.addCallback("/test/subtopic", secondCb);
+
+        callbackManager.fireMessage(event);
+        assertEquals(2, fireCount.get());
     }
 
     /**
