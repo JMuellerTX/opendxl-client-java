@@ -173,4 +173,71 @@ public class MessageWireFormatTest {
         assertTrue("payload not encoded as raw16", found);
         assertEquals(event.getMessageId(), Message.fromBytes(bytes).getMessageId());
     }
+
+    /**
+     * Tests that an ErrorResponse whose errorCode is encoded as an unsigned 32-bit integer
+     * (0xce 80 00 00 01, as written by the Python and JavaScript clients for 0x80000001)
+     * unpacks cleanly as 0x80000001 (-2147483647) without throwing MessageIntegerOverflowException.
+     *
+     * @throws Exception If an error occurs
+     */
+    @Test
+    public void testUnsigned32BitErrorCode() throws Exception {
+        final byte[] packed = vector("errorMin");
+        // Replace the int32 marker (0xd2 80 00 00 00) with uint32 0x80000001 (0xce 80 00 00 01)
+        boolean replaced = false;
+        for (int i = 0; i < packed.length - 4; i++) {
+            if (packed[i] == (byte) 0xd2
+                && packed[i + 1] == (byte) 0x80
+                && packed[i + 2] == 0
+                && packed[i + 3] == 0
+                && packed[i + 4] == 0) {
+                packed[i] = (byte) 0xce;
+                packed[i + 4] = 1;
+                replaced = true;
+                break;
+            }
+        }
+        assertTrue("Expected int32 0x80000000 marker not found", replaced);
+        final ErrorResponse unpacked = (ErrorResponse) Message.fromBytes(packed);
+        assertEquals(0x80000001, unpacked.getErrorCode());
+        assertEquals("Fabric error é", unpacked.getErrorMessage());
+    }
+
+    /**
+     * Tests that an odd-length otherFields array consumes all elements and discards the trailing
+     * orphan key without desynchronizing subsequent v2 and v3 fields on the MessagePack stream.
+     *
+     * @throws Exception If an error occurs
+     */
+    @Test
+    public void testOddLengthOtherFieldsArray() throws Exception {
+        final org.msgpack.core.MessageBufferPacker packer = org.msgpack.core.MessagePack.newDefaultBufferPacker();
+        packer.packInt(3); // version 3
+        packer.packInt(Message.MESSAGE_TYPE_EVENT);
+        packer.packString("{msg-1}");
+        packer.packString(SOURCE_CLIENT_ID);
+        packer.packString("{broker-1}");
+        packer.packArrayHeader(0); // brokerIds
+        packer.packArrayHeader(0); // clientIds
+        packer.packString("payload");
+        // v1: odd-length otherFields array [k1, v1, orphan]
+        packer.packArrayHeader(3);
+        packer.packString("k1");
+        packer.packString("v1");
+        packer.packString("orphanKey");
+        // v2: sourceTenantGuid, destTenantGuids
+        packer.packString("{tenant-1}");
+        packer.packArrayHeader(1);
+        packer.packString("{tenant-2}");
+        // v3: sourceClientInstanceId
+        packer.packString("{instance-99}");
+        packer.close();
+
+        final Message unpacked = Message.fromBytes(packer.toByteArray());
+        assertEquals("v1", unpacked.getOtherFields().get("k1"));
+        assertEquals(1, unpacked.getOtherFields().size());
+        assertEquals("{tenant-1}", unpacked.getSourceTenantGuid());
+        assertEquals("{instance-99}", unpacked.getSourceClientInstanceId());
+    }
 }
