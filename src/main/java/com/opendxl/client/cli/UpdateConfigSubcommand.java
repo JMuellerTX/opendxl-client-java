@@ -276,7 +276,14 @@ class UpdateConfigSubcommand extends DxlCliCommand {
          * @param webSocketBrokers The list of brokers supporting DXL connections over WebSockets
          */
         public void setWebSocketBrokers(List<Broker> webSocketBrokers) {
-            this.webSocketBrokers = webSocketBrokers;
+            if (webSocketBrokers != null) {
+                for (Broker broker : webSocketBrokers) {
+                    broker.setProtocol(Broker.WSS_PROTOCOL);
+                }
+                this.webSocketBrokers = webSocketBrokers;
+            } else {
+                this.webSocketBrokers = new ArrayList<>();
+            }
         }
 
         /**
@@ -289,15 +296,18 @@ class UpdateConfigSubcommand extends DxlCliCommand {
          */
         @JsonAnySetter
         public void setWebSocketBrokers(String fieldKey, JsonNode embeddedField) {
-            embeddedField.forEach(jsonNode -> {
-                try {
-                    Broker broker = GENERIC_MAPPER.readValue(jsonNode.toString(), Broker.class);
-                    broker.setProtocol(Broker.WSS_PROTOCOL);
-                    webSocketBrokers.add(broker);
-                } catch (IOException e) {
-                    logger.warn("Error creating websocket broker", e);
-                }
-            });
+            if (("webSocketBrokers".equals(fieldKey) || "brokersWebSockets".equals(fieldKey))
+                    && embeddedField != null) {
+                embeddedField.forEach(jsonNode -> {
+                    try {
+                        Broker broker = GENERIC_MAPPER.readValue(jsonNode.toString(), Broker.class);
+                        broker.setProtocol(Broker.WSS_PROTOCOL);
+                        webSocketBrokers.add(broker);
+                    } catch (IOException e) {
+                        logger.warn("Error creating websocket broker", e);
+                    }
+                });
+            }
         }
 
         /**

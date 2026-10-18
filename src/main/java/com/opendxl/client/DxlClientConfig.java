@@ -970,20 +970,29 @@ public class DxlClientConfig {
         parser.addValue(GENERAL_INI_SECTION, VERIFY_HOSTNAME_INI_KEY_NAME, String.valueOf(this.verifyHostname));
 
         // Add Broker Cert Chain
-        parser.addValue(CERTS_INI_SECTION, BROKER_CERT_INI_CHAIN_KEY_NAME, this.brokerCaBundlePathOriginal);
+        parser.addValue(CERTS_INI_SECTION, BROKER_CERT_INI_CHAIN_KEY_NAME,
+            this.brokerCaBundlePathOriginal != null ? this.brokerCaBundlePathOriginal : this.brokerCaBundlePath);
         // Add Cert File
-        parser.addValue(CERTS_INI_SECTION, CERT_FILE_INI_KEY_NAME, this.certFileOriginal);
+        parser.addValue(CERTS_INI_SECTION, CERT_FILE_INI_KEY_NAME,
+            this.certFileOriginal != null ? this.certFileOriginal : this.certFile);
         // Add Private Key
-        parser.addValue(CERTS_INI_SECTION, PRIVATE_KEY_INI_KEY_NAME, this.privateKeyOriginal);
+        parser.addValue(CERTS_INI_SECTION, PRIVATE_KEY_INI_KEY_NAME,
+            this.privateKeyOriginal != null ? this.privateKeyOriginal : this.privateKey);
 
         // Add Brokers
-        for (Broker broker : this.brokers) {
-            parser.addValue(BROKERS_INI_SECTION, broker.getUniqueId(), broker.toConfigString());
+        parser.clearSection(BROKERS_INI_SECTION);
+        if (this.brokers != null) {
+            for (Broker broker : this.brokers) {
+                parser.addValue(BROKERS_INI_SECTION, broker.getUniqueId(), broker.toConfigString());
+            }
         }
 
         // Add WebSocket Brokers
-        for (Broker broker : this.webSocketBrokers) {
-            parser.addValue(WEBSOCKET_BROKERS_INI_SECTION, broker.getUniqueId(), broker.toConfigString());
+        parser.clearSection(WEBSOCKET_BROKERS_INI_SECTION);
+        if (this.webSocketBrokers != null) {
+            for (Broker broker : this.webSocketBrokers) {
+                parser.addValue(WEBSOCKET_BROKERS_INI_SECTION, broker.getUniqueId(), broker.toConfigString());
+            }
         }
 
         // Add Proxy info
@@ -1377,8 +1386,9 @@ public class DxlClientConfig {
             if (StringUtils.isNotBlank(configuredClientId)) {
                 dxlClientConfig.setUniqueId(configuredClientId.trim());
             }
-            dxlClientConfig.useWebSockets = stringToBooleanMap.get(parser.getValue(GENERAL_INI_SECTION,
-                USE_WEBSOCKETS_INI_KEY_NAME, (!webSocketBrokers.isEmpty() && brokers.isEmpty()) ? "true" : "false"));
+            dxlClientConfig.useWebSockets = parseBooleanSetting(USE_WEBSOCKETS_INI_KEY_NAME,
+                parser.getValue(GENERAL_INI_SECTION, USE_WEBSOCKETS_INI_KEY_NAME,
+                    (!webSocketBrokers.isEmpty() && brokers.isEmpty()) ? "true" : "false"));
             dxlClientConfig.tlsMinVersion = normalizeTlsVersion(
                 parser.getValue(GENERAL_INI_SECTION, TLS_MIN_VERSION_INI_KEY_NAME, DEFAULT_TLS_MIN_VERSION));
             final String configuredCiphers =
@@ -1393,7 +1403,7 @@ public class DxlClientConfig {
                     + " Using the cipher suites enabled by default.");
                 dxlClientConfig.tlsCiphers = null;
             }
-            dxlClientConfig.verifyHostname = stringToBooleanMap.get(
+            dxlClientConfig.verifyHostname = parseBooleanSetting(VERIFY_HOSTNAME_INI_KEY_NAME,
                 parser.getValue(GENERAL_INI_SECTION, VERIFY_HOSTNAME_INI_KEY_NAME, DEFAULT_VERIFY_HOSTNAME));
 
             // Get the proxy information
@@ -1408,5 +1418,24 @@ public class DxlClientConfig {
         } catch (Exception ex) {
             throw new DxlException("Error reading configuration file: " + fileName, ex);
         }
+    }
+
+    /**
+     * Parses a boolean configuration value from {@link #stringToBooleanMap}.
+     *
+     * @param keyName The configuration key name
+     * @param value   The raw configuration value
+     * @return The parsed boolean value
+     * @throws DxlException If the value is not a recognized boolean representation
+     */
+    private static boolean parseBooleanSetting(final String keyName, final String value) throws DxlException {
+        if (value == null) {
+            return false;
+        }
+        final Boolean parsed = stringToBooleanMap.get(value.trim());
+        if (parsed == null) {
+            throw new DxlException("Invalid boolean value for " + keyName + ": " + value);
+        }
+        return parsed;
     }
 }
