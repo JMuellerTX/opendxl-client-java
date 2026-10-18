@@ -176,6 +176,9 @@ class ServiceManager implements RequestCallback, AutoCloseable {
             // Stop the TTL timer
             handler.stopTimer();
 
+            // Mark the service for deletion before checking active topics
+            handler.markForDeletion();
+
             // Unsubscribe the topic(s) and unregister the generic callback
             for (String topic : handler.getRequestTopics()) {
                 // This was the reason for the reference counter in the MessageCallback
@@ -191,9 +194,6 @@ class ServiceManager implements RequestCallback, AutoCloseable {
                     client.removeRequestCallback(topic, this);
                 }
             }
-
-            // Mark the service for deletion
-            handler.markForDeletion();
 
             // If the client is actually connected, send unregister event. Remove upon success.
             if (client.isConnected()) {
@@ -330,6 +330,7 @@ class ServiceManager implements RequestCallback, AutoCloseable {
                     }
                 }
             }
+            clonedServices = new HashMap<>(services);
         } finally {
             lock.writeLock().unlock();
         }

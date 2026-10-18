@@ -127,7 +127,16 @@ class IniParser {
      * @throws Exception If an error occurs
      */
     public String getValue(final String sectionName, final String keyName) throws Exception {
-        final String value = getSection(sectionName).get(keyName.toLowerCase());
+        final Map<String, String> section = getSection(sectionName);
+        String value = section.get(keyName.toLowerCase());
+        if (value == null) {
+            for (Entry<String, String> entry : section.entrySet()) {
+                if (entry.getKey().equalsIgnoreCase(keyName)) {
+                    value = entry.getValue();
+                    break;
+                }
+            }
+        }
         if (value == null) {
             throw new Exception("Key not found in section '" + sectionName + "': " + keyName);
         }
@@ -163,8 +172,21 @@ class IniParser {
         Map<String, String> keyValueMap = sections.containsKey(sectionName) ? sections.get(sectionName)
                 : new LinkedHashMap<>();
 
+        keyValueMap.keySet().removeIf(existingKey -> existingKey.equalsIgnoreCase(keyName));
         keyValueMap.put(keyName, value);
         sections.put(sectionName, keyValueMap);
+    }
+
+    /**
+     * Clears all values in the specified section
+     *
+     * @param sectionName The section name
+     */
+    public void clearSection(final String sectionName) {
+        final Map<String, String> section = sections.get(sectionName);
+        if (section != null) {
+            section.clear();
+        }
     }
 
     /**
