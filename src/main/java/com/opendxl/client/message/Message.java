@@ -517,12 +517,18 @@ public abstract class Message {
         //noinspection unchecked
         Map<String, String> retMap = Collections.EMPTY_MAP;
         final int arraySize = unpacker.unpackArrayHeader();
-        if (arraySize > 0 && ((arraySize % 2) == 0)) {
-            retMap = new HashMap<>(arraySize >> 1);
-            for (int i = 0; i < arraySize; i += 2) {
-                retMap.put(
-                    new String(unpackBytes(unpacker), CHARSET_UTF8),
-                    new String(unpackBytes(unpacker), CHARSET_UTF8));
+        if (arraySize > 0) {
+            final int pairCount = arraySize >> 1;
+            if (pairCount > 0) {
+                retMap = new HashMap<>(pairCount);
+                for (int i = 0; i < pairCount; i++) {
+                    retMap.put(
+                        new String(unpackBytes(unpacker), CHARSET_UTF8),
+                        new String(unpackBytes(unpacker), CHARSET_UTF8));
+                }
+            }
+            if ((arraySize % 2) != 0) {
+                unpackBytes(unpacker);
             }
         }
         return retMap;
