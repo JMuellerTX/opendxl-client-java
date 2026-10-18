@@ -53,6 +53,7 @@ public class DxlClientConfig {
     private static final String BROKER_CERT_INI_CHAIN_KEY_NAME = "BrokerCertChain";
     private static final String CERT_FILE_INI_KEY_NAME = "CertFile";
     private static final String PRIVATE_KEY_INI_KEY_NAME = "PrivateKey";
+    private static final String CLIENT_ID_INI_KEY_NAME = "ClientId";
     private static final String USE_WEBSOCKETS_INI_KEY_NAME = "UseWebSockets";
     private static final String TLS_MIN_VERSION_INI_KEY_NAME = "TlsMinVersion";
     private static final String TLS_CIPHERS_INI_KEY_NAME = "TlsCiphers";
@@ -283,6 +284,11 @@ public class DxlClientConfig {
     private char[] proxyPassword;
 
     /**
+     * Whether the client identifier was explicitly configured (via file or setter) and should be written to INI
+     */
+    private boolean writeClientId = false;
+
+    /**
      * Default constructor
      */
     protected DxlClientConfig() {
@@ -299,6 +305,7 @@ public class DxlClientConfig {
             this.uniqueId = UuidGenerator.generateIdAsString();
         } else {
             this.uniqueId = uniqueId;
+            this.writeClientId = true;
         }
     }
 
@@ -390,6 +397,7 @@ public class DxlClientConfig {
      */
     public void setUniqueId(final String uniqueId) {
         this.uniqueId = uniqueId;
+        this.writeClientId = StringUtils.isNotBlank(uniqueId);
     }
 
     /**
@@ -943,6 +951,9 @@ public class DxlClientConfig {
         final String certsSection = "Certs";
 
         final IniParser parser = new IniParser();
+        if (this.writeClientId && StringUtils.isNotBlank(this.uniqueId)) {
+            parser.addValue(GENERAL_INI_SECTION, CLIENT_ID_INI_KEY_NAME, this.uniqueId);
+        }
         // Add Use WebSockets
         parser.addValue(GENERAL_INI_SECTION, USE_WEBSOCKETS_INI_KEY_NAME, String.valueOf(this.useWebSockets));
         // Add the TLS settings
@@ -1361,6 +1372,11 @@ public class DxlClientConfig {
             dxlClientConfig.brokerCaBundlePathOriginal = brokerCaBundleFileOriginal;
             dxlClientConfig.certFileOriginal = certFileOriginal;
             dxlClientConfig.privateKeyOriginal = privateKeyOriginal;
+            final String configuredClientId =
+                parser.getValue(GENERAL_INI_SECTION, CLIENT_ID_INI_KEY_NAME, "");
+            if (StringUtils.isNotBlank(configuredClientId)) {
+                dxlClientConfig.setUniqueId(configuredClientId.trim());
+            }
             dxlClientConfig.useWebSockets = stringToBooleanMap.get(parser.getValue(GENERAL_INI_SECTION,
                 USE_WEBSOCKETS_INI_KEY_NAME, (!webSocketBrokers.isEmpty() && brokers.isEmpty()) ? "true" : "false"));
             dxlClientConfig.tlsMinVersion = normalizeTlsVersion(

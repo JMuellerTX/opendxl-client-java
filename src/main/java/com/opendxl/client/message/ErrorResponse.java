@@ -126,7 +126,7 @@ public class ErrorResponse extends Response {
     @Override
     void unpackMessage(final MessageUnpacker unpacker) throws IOException {
         super.unpackMessage(unpacker);
-        this.errorCode = unpacker.unpackInt();
+        this.errorCode = (int) unpacker.unpackLong();
         this.errorMessage = new String(unpackBytes(unpacker), CHARSET_UTF8);
     }
 }

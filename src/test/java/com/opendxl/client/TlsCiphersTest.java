@@ -134,10 +134,13 @@ public class TlsCiphersTest extends AbstractDxlTest {
         // configuration would take TlsCiphers=default as "the ssl module's defaults" and lose
         // the AES128-SHA256 fallback it needs for brokers older than DXL 6.1.1.
         config.setTlsCiphers("default");
+        config.setUniqueId("{custom-client-id}");
         config.write(written.getPath());
         assertFalse(new String(Files.readAllBytes(written.toPath()), StandardCharsets.UTF_8)
             .contains("TlsCiphers"));
-        assertNull(DxlClientConfig.createDxlConfigFromFile(written.getPath()).getTlsCiphers());
+        final DxlClientConfig rereadWithId = DxlClientConfig.createDxlConfigFromFile(written.getPath());
+        assertNull(rereadWithId.getTlsCiphers());
+        org.junit.Assert.assertEquals("{custom-client-id}", rereadWithId.getUniqueId());
     }
 
     /**
